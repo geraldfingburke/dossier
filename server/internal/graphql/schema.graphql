@@ -1,0 +1,70 @@
+type User {
+  id: ID!
+  email: String!
+  name: String!
+  feeds: [Feed!]!
+  digests: [Digest!]!
+  createdAt: String!
+}
+
+type Feed {
+  id: ID!
+  url: String!
+  title: String
+  description: String
+  active: Boolean!
+  articles: [Article!]!
+  createdAt: String!
+  updatedAt: String!
+}
+
+type Article {
+  id: ID!
+  feedId: ID!
+  title: String!
+  link: String!
+  description: String
+  content: String
+  author: String
+  publishedAt: String!
+  createdAt: String!
+}
+
+type Digest {
+  id: ID!
+  userId: ID!
+  date: String!
+  summary: String!
+  articles: [Article!]!
+  createdAt: String!
+}
+
+type AuthPayload {
+  token: String!
+  user: User!
+}
+
+type Query {
+  me: User
+  feed(id: ID!): Feed
+  feeds: [Feed!]!
+  article(id: ID!): Article
+  articles(limit: Int, offset: Int): [Article!]!
+  digest(id: ID!): Digest
+  digests(limit: Int): [Digest!]!
+  latestDigest: Digest
+}
+
+type Mutation {
+  register(email: String!, password: String!, name: String!): AuthPayload!
+  login(email: String!, password: String!): AuthPayload!
+  
+  addFeed(url: String!): Feed!
+  updateFeed(id: ID!, title: String, description: String, active: Boolean): Feed!
+  deleteFeed(id: ID!): Boolean!
+  
+  refreshFeed(id: ID!): Feed!
+  refreshAllFeeds: Boolean!
+  
+  generateDigest: Digest!
+}
