@@ -176,27 +176,15 @@ func (s *Service) GenerateUserDigest(ctx context.Context, db *sql.DB, userID int
 
 	// Create digest
 	today := time.Now().Truncate(24 * time.Hour)
-	result, err := db.ExecContext(ctx, `
+	var digestID int
+	err = db.QueryRowContext(ctx, `
 		INSERT INTO digests (user_id, date, summary)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (user_id, date) DO UPDATE SET summary = $3
 		RETURNING id
-	`, userID, today, summary)
+	`, userID, today, summary).Scan(&digestID)
 	if err != nil {
 		return err
-	}
-
-	digestID, err := result.LastInsertId()
-	if err != nil {
-		// PostgreSQL doesn't support LastInsertId, so we need to query it
-		var id int
-		err = db.QueryRowContext(ctx, `
-			SELECT id FROM digests WHERE user_id = $1 AND date = $2
-		`, userID, today).Scan(&id)
-		if err != nil {
-			return err
-		}
-		digestID = int64(id)
 	}
 
 	// Link articles to digest
