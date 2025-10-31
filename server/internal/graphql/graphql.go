@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/geraldfingburke/dossier/server/internal/ai"
@@ -17,7 +19,12 @@ import (
 
 // Handler creates the GraphQL HTTP handler
 func NewHandler(db *sql.DB, rssService *rss.Service, aiService *ai.Service) http.Handler {
-	authService := auth.NewService("")
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "development-secret-key-change-in-production"
+		log.Println("WARNING: Using default JWT secret. Set JWT_SECRET environment variable in production!")
+	}
+	authService := auth.NewService(jwtSecret)
 
 	// Define GraphQL types
 	userType := graphql.NewObject(graphql.ObjectConfig{
