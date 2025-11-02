@@ -1,0 +1,19 @@
+/**
+ * Global Reset & Base Styles
+ * Provides consistent baseline styling across all browsers
+ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, sans-serif;
+  background: #0a0a0b;
+  color: #e5e5e7;
+  line-height: 1.6;
+  overflow-x: hidden;
+}

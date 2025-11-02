@@ -1,0 +1,59 @@
+/**
+ * Reusable Component Styles
+ * Common UI components used throughout the app
+ */
+
+/* Card Component */
+.card {
+  background: var(--color-bg-elevated);
+  backdrop-filter: var(--blur-md);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xl);
+  margin-bottom: var(--spacing-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Message Alerts */
+.error {
+  color: var(--color-danger-light);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-md);
+  backdrop-filter: var(--blur-sm);
+}
+
+.success {
+  color: var(--color-success-light);
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-md);
+  backdrop-filter: var(--blur-sm);
+}
+
+/* Loading Animation */
+.loading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.loading::after {
+  content: "";
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,95 @@
+/**
+ * Global Button Styles
+ * Consistent button styling across the application
+ */
+
+button {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: rgba(55, 65, 81, 0.8);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: var(--transition-fast);
+  backdrop-filter: var(--blur-sm);
+  border: 1px solid var(--color-border-subtle);
+}
+
+button:hover {
+  background: rgba(75, 85, 99, 0.9);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+button.primary {
+  background: linear-gradient(
+    135deg,
+    var(--color-primary),
+    var(--color-primary-dark)
+  );
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+button.primary:hover {
+  background: linear-gradient(
+    135deg,
+    var(--color-primary-darker),
+    var(--color-primary-dark)
+  );
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
+}
+
+button.secondary {
+  background: rgba(55, 65, 81, 0.8);
+  border: 1px solid var(--color-border-subtle);
+}
+
+button.secondary:hover {
+  background: rgba(75, 85, 99, 0.9);
+}
+
+button.success {
+  background: linear-gradient(
+    135deg,
+    var(--color-success),
+    var(--color-success-dark)
+  );
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+button.success:hover {
+  background: linear-gradient(
+    135deg,
+    var(--color-success-dark),
+    var(--color-success-darker)
+  );
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+}
+
+button.danger {
+  background: linear-gradient(
+    135deg,
+    var(--color-danger),
+    var(--color-danger-dark)
+  );
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+button.danger:hover {
+  background: linear-gradient(
+    135deg,
+    var(--color-danger-dark),
+    var(--color-danger-darker)
+  );
+  box-shadow: 0 8px 24px rgba(239, 68, 68, 0.3);
+}
+
+button:disabled {
+  background: rgba(55, 65, 81, 0.4);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  opacity: 0.5;
+}

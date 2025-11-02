@@ -1,0 +1,42 @@
+/**
+ * Form Input Styles
+ * Consistent styling for inputs, textareas, and select elements
+ */
+
+input,
+textarea,
+select {
+  padding: 0.875rem;
+  border: 1px solid var(--color-border-input);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-input);
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  font-family: inherit;
+  width: 100%;
+  backdrop-filter: var(--blur-sm);
+  transition: var(--transition-fast);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background: var(--color-bg-input-focus);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-placeholder);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+select {
+  cursor: pointer;
+}

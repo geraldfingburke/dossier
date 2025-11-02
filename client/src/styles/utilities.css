@@ -1,0 +1,65 @@
+/**
+ * Utility Classes
+ * Single-purpose helper classes for quick styling
+ */
+
+/* Typography */
+.text-sm {
+  font-size: 0.875rem;
+}
+
+.text-xs {
+  font-size: 0.75rem;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+/* Opacity */
+.opacity-60 {
+  opacity: 0.6;
+}
+
+/* Layout - Flexbox */
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+/* Spacing - Gap */
+.gap-2 {
+  gap: var(--spacing-sm);
+}
+
+.gap-4 {
+  gap: var(--spacing-md);
+}
+
+/* Spacing - Margin */
+.mb-2 {
+  margin-bottom: var(--spacing-sm);
+}
+
+.mb-4 {
+  margin-bottom: var(--spacing-md);
+}
+
+.mt-4 {
+  margin-top: var(--spacing-md);
+}

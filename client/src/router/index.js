@@ -30,11 +30,6 @@ const routes = [
       title: "Edit Dossier",
     },
   },
-  // Redirect old paths for backward compatibility
-  {
-    path: "/dossiers",
-    redirect: "/",
-  },
 ];
 
 const router = createRouter({
