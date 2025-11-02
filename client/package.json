@@ -20,6 +20,7 @@
     "graphql-request": "^7.3.1",
     "vee-validate": "^4.15.1",
     "vite": "^7.1.12",
-    "vue": "^3.5.22"
+    "vue": "^3.5.22",
+    "vue-router": "^4.6.3"
   }
 }

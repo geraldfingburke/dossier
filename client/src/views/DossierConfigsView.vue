@@ -13,7 +13,7 @@
         >
           Test Email
         </button>
-        <button @click="showCreateForm = true" class="primary">
+        <button @click="createNewDossier" class="primary">
           <span>+ New Dossier</span>
         </button>
       </div>
@@ -23,246 +23,53 @@
     <div v-if="error" class="error">{{ error }}</div>
     <div v-if="success" class="success">{{ success }}</div>
 
-    <!-- Create/Edit Form Modal -->
-    <div
-      v-if="showCreateForm || editingConfig"
-      class="modal-overlay"
-      @click.self="closeForm"
-    >
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>{{ editingConfig ? "Edit" : "Create" }} Dossier Configuration</h3>
-          <button @click="closeForm" class="close-btn">&times;</button>
-        </div>
+    <!-- Dossier Tiles -->
+    <div v-if="loading" class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading dossiers...</p>
+    </div>
 
-        <form @submit.prevent="saveConfig" class="config-form">
-          <div class="form-group">
-            <label>Title*</label>
-            <input
-              v-model="title"
-              type="text"
-              placeholder="e.g., Daily Tech News"
-              :class="{ error: titleError }"
-            />
-            <div v-if="titleError" class="field-error">{{ titleError }}</div>
-          </div>
-
-          <div class="form-group">
-            <label>Email Address*</label>
-            <input
-              v-model="emailField"
-              type="email"
-              placeholder="your@email.com"
-              :class="{ error: emailError }"
-            />
-            <div v-if="emailError" class="field-error">{{ emailError }}</div>
-          </div>
-
-          <div class="form-group">
-            <label>RSS Feed URLs*</label>
-            <div class="feed-urls" :class="{ error: feedUrlsError }">
-              <div
-                v-for="(url, index) in feedUrls"
-                :key="index"
-                class="feed-url-row"
-              >
-                <input
-                  v-model="feedUrls[index]"
-                  type="url"
-                  placeholder="https://example.com/feed.xml"
-                  :class="{ error: feedUrlsError }"
-                />
-                <button
-                  type="button"
-                  @click="removeFeedUrl(index)"
-                  class="danger remove-btn"
-                  :disabled="feedUrls.length === 1"
-                >
-                  Remove
-                </button>
-              </div>
-              <button type="button" @click="addFeedUrl" class="add-feed-btn">
-                + Add Feed
-              </button>
-            </div>
-            <div v-if="feedUrlsError" class="field-error">
-              {{ feedUrlsError }}
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>Article Count (1-50)*</label>
-              <input
-                v-model.number="articleCount"
-                type="number"
-                min="1"
-                max="50"
-                :class="{ error: articleCountError }"
-              />
-              <div v-if="articleCountError" class="field-error">
-                {{ articleCountError }}
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>Frequency*</label>
-              <select v-model="frequency" :class="{ error: frequencyError }">
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-              </select>
-              <div v-if="frequencyError" class="field-error">
-                {{ frequencyError }}
-              </div>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>Delivery Time*</label>
-              <input
-                v-model="deliveryTime"
-                type="time"
-                :class="{ error: deliveryTimeError }"
-              />
-              <div v-if="deliveryTimeError" class="field-error">
-                {{ deliveryTimeError }}
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>Timezone</label>
-              <select v-model="timezone">
-                <option value="UTC">UTC</option>
-                <option value="America/New_York">Eastern Time</option>
-                <option value="America/Chicago">Central Time</option>
-                <option value="America/Denver">Mountain Time</option>
-                <option value="America/Los_Angeles">Pacific Time</option>
-                <option value="Europe/London">London</option>
-                <option value="Europe/Paris">Paris</option>
-                <option value="Asia/Tokyo">Tokyo</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>Tone</label>
-              <select v-model="tone">
-                <option value="professional">Professional</option>
-                <option value="casual">Casual</option>
-                <option value="humorous">Humorous</option>
-                <option value="analytical">Analytical</option>
-                <option value="orc">Orc (Warcraft style)</option>
-                <option value="sweary">Sweary (Explicit)</option>
-                <option value="robot">Robot (Beep boop)</option>
-                <option value="southern-belle">Southern Belle</option>
-                <option value="doomsayer">Doomsayer (Apocalyptic)</option>
-                <option value="apologetic">Apologetic</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label>Language</label>
-              <select v-model="language">
-                <option value="English">English</option>
-                <option value="Spanish">Spanish</option>
-                <option value="French">French</option>
-                <option value="German">German</option>
-                <option value="Italian">Italian</option>
-                <option value="Portuguese">Portuguese</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Special Instructions</label>
-            <textarea
-              v-model="specialInstructions"
-              placeholder="Any specific instructions for the AI summary (optional)"
-              rows="3"
-            ></textarea>
-          </div>
-
-          <div class="form-actions">
-            <button type="button" @click="closeForm">Cancel</button>
-            <button type="submit" class="primary" :disabled="loading">
-              {{ loading ? "Saving..." : editingConfig ? "Update" : "Create" }}
-            </button>
-          </div>
-        </form>
+    <div v-else-if="configs.length === 0" class="empty-state">
+      <div class="empty-content">
+        <h3>No dossiers yet</h3>
+        <p>Create your first dossier to start receiving automated summaries</p>
+        <button @click="createNewDossier" class="primary">
+          Create Your First Dossier
+        </button>
       </div>
     </div>
 
-    <!-- Configs List -->
-    <div class="configs-grid">
-      <div v-if="loading && configs.length === 0" class="loading-state">
-        <div class="loading">Loading configurations...</div>
-      </div>
+    <div v-else class="configs-list">
+      <div
+        v-for="config in configs"
+        :key="config.id"
+        class="dossier-tile"
+        @click="viewDossier(config.id)"
+      >
+        <div class="tile-header">
+          <h3>{{ config.title }}</h3>
+          <span :class="['status-indicator', { active: config.active }]">
+            {{ config.active ? "●" : "○" }}
+          </span>
+        </div>
 
-      <div v-else-if="configs.length === 0" class="empty-state">
-        <div class="empty-icon">📧</div>
-        <h3>No Dossiers</h3>
-        <p>Create your first automated dossier to get started</p>
-        <button @click="showCreateForm = true" class="primary">
-          Create First Dossier
-        </button>
-      </div>
-
-      <div v-else class="configs-list">
-        <div v-for="config in configs" :key="config.id" class="config-card">
-          <div class="config-header">
-            <div>
-              <h3>{{ config.title }}</h3>
-              <p class="config-email">{{ config.email }}</p>
-            </div>
-            <div class="config-actions">
-              <button
-                @click="testSendDossier(config.id)"
-                class="test-btn"
-                :disabled="loading"
-              >
-                Test Send
-              </button>
-              <button @click="editConfig(config)" class="edit-btn">Edit</button>
-              <button
-                @click="deleteConfig(config.id)"
-                class="danger delete-btn"
-              >
-                Delete
-              </button>
-            </div>
+        <div class="tile-summary">
+          <div class="summary-item">
+            <span class="icon">📡</span>
+            <span>{{ config.feedUrls.length }} feeds</span>
           </div>
-
-          <div class="config-details">
-            <div class="detail-row">
-              <span class="label">Feeds:</span>
-              <span>{{ config.feedUrls.length }} feed(s)</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Frequency:</span>
-              <span>{{ config.frequency }} at {{ config.deliveryTime }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Articles:</span>
-              <span>{{ config.articleCount }} per dossier</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Style:</span>
-              <span>{{ config.tone }} tone, {{ config.language }}</span>
-            </div>
+          <div class="summary-item">
+            <span class="icon">📅</span>
+            <span>{{ config.frequency }} at {{ config.deliveryTime }}</span>
           </div>
-
-          <div v-if="config.specialInstructions" class="special-instructions">
-            <strong>Instructions:</strong> {{ config.specialInstructions }}
+          <div class="summary-item">
+            <span class="icon">🎯</span>
+            <span>{{ config.tone }} tone</span>
           </div>
+        </div>
 
-          <div class="config-status">
-            <span :class="['status-badge', { active: config.active }]">
-              {{ config.active ? "Active" : "Inactive" }}
-            </span>
-          </div>
+        <div class="tile-footer">
+          <span class="email-indicator">{{ config.email }}</span>
         </div>
       </div>
     </div>
@@ -273,11 +80,13 @@
 import { ref, reactive, onMounted } from "vue";
 import { useStore } from "../store";
 import { useForm, useField } from "vee-validate";
+import { useRouter } from "vue-router";
 
 export default {
   name: "DossierConfigsView",
   setup() {
     const store = useStore();
+    const router = useRouter();
     const configs = ref([]);
     const loading = ref(false);
     const error = ref("");
@@ -535,6 +344,14 @@ export default {
       }
     };
 
+    const viewDossier = (dossierId) => {
+      router.push(`/dossier/${dossierId}`);
+    };
+
+    const createNewDossier = () => {
+      router.push("/dossier/new");
+    };
+
     onMounted(() => {
       loadConfigs();
     });
@@ -552,6 +369,8 @@ export default {
       saveConfig,
       editConfig,
       deleteConfig,
+      viewDossier,
+      createNewDossier,
       // VeeValidate fields
       title,
       titleError,
@@ -808,60 +627,157 @@ textarea.error:focus {
 
 .configs-list {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 1.5rem;
 }
 
-.config-card {
-  background: rgba(26, 26, 30, 0.6);
+.dossier-tile {
+  background: linear-gradient(
+    135deg,
+    rgba(26, 26, 30, 0.8) 0%,
+    rgba(18, 18, 22, 0.9) 100%
+  );
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 1rem;
-  padding: 2rem;
-  transition: all 0.2s ease;
+  border-radius: 16px;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
 }
 
-.config-card:hover {
-  border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-  transform: translateY(-2px);
+.dossier-tile::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6, #06b6d4);
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
-.config-header {
+.dossier-tile:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  transform: translateY(-4px);
+}
+
+.dossier-tile:hover::before {
+  opacity: 1;
+}
+
+.tile-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 1.5rem;
-  gap: 1rem;
+  margin-bottom: 1rem;
 }
 
-.config-header h3 {
+.tile-header h3 {
   font-size: 1.25rem;
   font-weight: 600;
-  margin-bottom: 0.25rem;
+  margin: 0;
+  color: #e5e5e7;
+  line-height: 1.3;
 }
 
-.config-email {
-  color: rgba(229, 229, 231, 0.6);
-  font-size: 0.875rem;
+.status-indicator {
+  font-size: 1.2rem;
+  opacity: 0.7;
+  transition: all 0.2s ease;
 }
 
-.config-actions {
+.status-indicator.active {
+  color: #22c55e;
+  opacity: 1;
+}
+
+.tile-summary {
   display: flex;
-  gap: 0.5rem;
-  flex-shrink: 0;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
 }
 
-.edit-btn,
-.delete-btn,
-.test-btn {
-  padding: 0.5rem 1rem;
-  font-size: 0.75rem;
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: rgba(229, 229, 231, 0.8);
+  font-size: 0.9rem;
 }
 
-.test-btn {
-  background: rgba(59, 130, 246, 0.1);
-  color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.3);
+.summary-item .icon {
+  font-size: 1rem;
+  opacity: 0.8;
+}
+
+.tile-footer {
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.email-indicator {
+  font-size: 0.85rem;
+  color: rgba(229, 229, 231, 0.6);
+  font-family: "SF Mono", "Monaco", "Cascadia Code", monospace;
+}
+
+/* Loading and Empty States */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(59, 130, 246, 0.3);
+  border-top: 3px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  padding: 2rem;
+}
+
+.empty-content {
+  text-align: center;
+  max-width: 400px;
+}
+
+.empty-content h3 {
+  font-size: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: #e5e5e7;
+}
+
+.empty-content p {
+  color: rgba(229, 229, 231, 0.7);
+  margin-bottom: 2rem;
+  line-height: 1.6;
 }
 
 .test-btn:hover:not(:disabled) {

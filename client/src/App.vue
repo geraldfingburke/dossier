@@ -10,19 +10,14 @@
     </header>
 
     <main class="main-container">
-      <DossierConfigsView />
+      <router-view />
     </main>
   </div>
 </template>
 
 <script>
-import DossierConfigsView from "./views/DossierConfigsView.vue";
-
 export default {
   name: "App",
-  components: {
-    DossierConfigsView,
-  },
 };
 </script>
 
