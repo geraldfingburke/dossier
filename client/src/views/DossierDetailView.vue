@@ -440,15 +440,7 @@
 </template>
 
 <script>
-import {
-  ref,
-  reactive,
-  computed,
-  onMounted,
-  watch,
-  nextTick,
-  toRefs,
-} from "vue";
+import { ref, reactive, computed, onMounted, watch, nextTick } from "vue";
 import { useStore } from "../store/index.js";
 import { useRouter } from "vue-router";
 
@@ -495,8 +487,7 @@ export default {
 
     const formData = reactive({
       title: "",
-      email: "",
-      emails: [""], // Support for multiple emails in the UI
+      emails: [""],
       feedUrls: [""],
       articleCount: 10,
       frequency: "daily",
@@ -509,22 +500,16 @@ export default {
     });
 
     const originalFormData = ref({});
-    const debugInfo = ref({
-      loaded: false,
-      configId: null,
-      formTitle: computed(() => formData.title),
-    });
 
     const checkForChanges = () => {
       if (
         !originalFormData.value ||
         Object.keys(originalFormData.value).length === 0
       ) {
-        hasChanges.value = isCreating.value; // For new dossiers, always show save button
+        hasChanges.value = isCreating.value;
         return;
       }
 
-      // Deep compare objects
       const current = JSON.stringify({
         title: formData.title,
         emails: formData.emails.filter((email) => email.trim()),
@@ -580,10 +565,9 @@ export default {
             (c) => c.id.toString() === props.dossierId.toString()
           );
           if (config) {
-            // First reset form data to ensure clean state
+            // Reset form data to ensure clean state
             Object.assign(formData, {
               title: "",
-              email: "",
               emails: [""],
               feedUrls: [""],
               articleCount: 10,
@@ -596,13 +580,11 @@ export default {
               active: true,
             });
 
-            // Force a Vue update cycle
             await nextTick();
 
-            // Now populate with actual data
+            // Populate with actual data
             Object.assign(formData, {
               title: config.title || "",
-              email: config.email || "",
               emails: config.email
                 ? config.email.split(",").map((e) => e.trim())
                 : [""],
@@ -620,11 +602,8 @@ export default {
               active: config.active !== undefined ? config.active : true,
             });
 
-            debugInfo.value.loaded = true;
-            debugInfo.value.configId = config.id;
             const configData = {
               title: formData.title,
-              email: formData.email,
               emails: formData.emails,
               feedUrls: formData.feedUrls,
               articleCount: formData.articleCount,
@@ -844,7 +823,6 @@ Your Dossier System`,
 
     const loadTones = async () => {
       try {
-        // Direct GraphQL call to bypass store issue
         const response = await fetch("/graphql", {
           method: "POST",
           headers: {
@@ -871,10 +849,9 @@ Your Dossier System`,
           throw new Error(result.errors[0].message);
         }
 
-        const tones = result.data.tones || [];
-        availableTones.value = tones;
+        availableTones.value = result.data.tones || [];
       } catch (err) {
-        // Silently fail - tones will remain empty array
+        console.error("Failed to load tones:", err);
       }
     };
 
@@ -889,7 +866,6 @@ Your Dossier System`,
         loading.value = true;
         error.value = "";
 
-        // Direct GraphQL call to create tone
         const response = await fetch("/graphql", {
           method: "POST",
           headers: {
@@ -923,7 +899,6 @@ Your Dossier System`,
         }
 
         const newTone = result.data.createTone;
-
         availableTones.value.push(newTone);
         formData.tone = newTone.name;
         showCustomToneModal.value = false;
@@ -989,7 +964,6 @@ Your Dossier System`,
     });
 
     return {
-      ...toRefs(props),
       loading,
       error,
       success,
@@ -1005,7 +979,6 @@ Your Dossier System`,
       isCreating,
       hasFormData,
       formData,
-      debugInfo,
       markChanged,
       checkForChanges,
       addEmail,
