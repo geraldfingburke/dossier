@@ -1,25 +1,54 @@
 package models
 
-import "time"
+import (
+	"database/sql/driver"
+	"time"
 
-// User represents a user in the system
-type User struct {
-	ID        int       `json:"id" db:"id"`
-	Email     string    `json:"email" db:"email"`
-	Password  string    `json:"-" db:"password"`
-	Name      string    `json:"name" db:"name"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	"github.com/lib/pq"
+)
+
+// DossierConfig represents a dossier configuration that defines how and when dossiers are generated
+type DossierConfig struct {
+	ID                  int       `json:"id" db:"id"`
+	Title               string    `json:"title" db:"title"`
+	Email               string    `json:"email" db:"email"`
+	FeedURLs            []string  `json:"feed_urls" db:"feed_urls"`
+	ArticleCount        int       `json:"article_count" db:"article_count"`
+	Frequency           string    `json:"frequency" db:"frequency"` // daily, weekly, monthly
+	DeliveryTime        string    `json:"delivery_time" db:"delivery_time"` // HH:MM format
+	Timezone            string    `json:"timezone" db:"timezone"`
+	Tone                string    `json:"tone" db:"tone"`
+	Language            string    `json:"language" db:"language"`
+	SpecialInstructions string    `json:"special_instructions" db:"special_instructions"`
+	Active              bool      `json:"active" db:"active"`
+	CreatedAt           time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at" db:"updated_at"`
 }
 
-// Feed represents an RSS feed
+// StringArray is a custom type for PostgreSQL string arrays
+type StringArray []string
+
+// Value implements the driver.Valuer interface for database storage
+func (a StringArray) Value() (driver.Value, error) {
+	if len(a) == 0 {
+		return "{}", nil
+	}
+	return pq.Array(a).Value()
+}
+
+// Scan implements the sql.Scanner interface for database retrieval
+func (a *StringArray) Scan(value interface{}) error {
+	return pq.Array(a).Scan(value)
+}
+
+// Feed represents an RSS feed (no user association)
 type Feed struct {
 	ID          int       `json:"id" db:"id"`
-	UserID      int       `json:"user_id" db:"user_id"`
 	URL         string    `json:"url" db:"url"`
 	Title       string    `json:"title" db:"title"`
 	Description string    `json:"description" db:"description"`
 	Active      bool      `json:"active" db:"active"`
+	LastFetched time.Time `json:"last_fetched" db:"last_fetched"`
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
 }
@@ -37,18 +66,20 @@ type Article struct {
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 }
 
-// Digest represents a daily digest with AI summaries
-type Digest struct {
-	ID        int       `json:"id" db:"id"`
-	UserID    int       `json:"user_id" db:"user_id"`
-	Date      time.Time `json:"date" db:"date"`
-	Summary   string    `json:"summary" db:"summary"`
-	Articles  []Article `json:"articles"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+// DossierDelivery represents an actual delivered dossier
+type DossierDelivery struct {
+	ID           int       `json:"id" db:"id"`
+	ConfigID     int       `json:"config_id" db:"config_id"`
+	DeliveryDate time.Time `json:"delivery_date" db:"delivery_date"`
+	Summary      string    `json:"summary" db:"summary"`
+	ArticleCount int       `json:"article_count" db:"article_count"`
+	EmailSent    bool      `json:"email_sent" db:"email_sent"`
+	Articles     []Article `json:"articles"` // Populated via join
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 }
 
-// DigestArticle is a junction table linking digests to articles
-type DigestArticle struct {
-	DigestID  int `json:"digest_id" db:"digest_id"`
-	ArticleID int `json:"article_id" db:"article_id"`
+// DeliveryArticle is a junction table linking deliveries to articles
+type DeliveryArticle struct {
+	DeliveryID int `json:"delivery_id" db:"delivery_id"`
+	ArticleID  int `json:"article_id" db:"article_id"`
 }

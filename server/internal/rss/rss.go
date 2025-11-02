@@ -67,6 +67,78 @@ func (s *Service) SaveArticles(db *sql.DB, feedID int, items []*gofeed.Item) err
 	return nil
 }
 
+// FetchArticlesFromFeeds fetches articles from multiple RSS feeds
+func (s *Service) FetchArticlesFromFeeds(ctx context.Context, feedURLs []string, maxArticles int) ([]models.Article, error) {
+	var allArticles []models.Article
+	articlesPerFeed := maxArticles / len(feedURLs)
+	if articlesPerFeed == 0 {
+		articlesPerFeed = 1
+	}
+
+	for _, feedURL := range feedURLs {
+		log.Printf("Fetching articles from feed: %s", feedURL)
+		
+		feed, err := s.FetchFeed(ctx, feedURL)
+		if err != nil {
+			log.Printf("Error fetching feed %s: %v", feedURL, err)
+			continue // Skip failed feeds but continue with others
+		}
+
+		// Convert feed items to Article models
+		feedArticles := make([]models.Article, 0)
+		for i, item := range feed.Items {
+			if i >= articlesPerFeed {
+				break
+			}
+
+			publishedAt := time.Now()
+			if item.PublishedParsed != nil {
+				publishedAt = *item.PublishedParsed
+			}
+
+			content := item.Content
+			if content == "" {
+				content = item.Description
+			}
+
+			author := ""
+			if item.Author != nil {
+				author = item.Author.Name
+			}
+
+			article := models.Article{
+				Title:       item.Title,
+				Link:        item.Link,
+				Description: item.Description,
+				Content:     content,
+				Author:      author,
+				PublishedAt: publishedAt,
+			}
+
+			feedArticles = append(feedArticles, article)
+		}
+
+		allArticles = append(allArticles, feedArticles...)
+		log.Printf("Fetched %d articles from %s", len(feedArticles), feedURL)
+	}
+
+	// Limit to maxArticles and sort by published date (newest first)
+	if len(allArticles) > maxArticles {
+		// Sort by published date
+		for i := 0; i < len(allArticles)-1; i++ {
+			for j := i + 1; j < len(allArticles); j++ {
+				if allArticles[i].PublishedAt.Before(allArticles[j].PublishedAt) {
+					allArticles[i], allArticles[j] = allArticles[j], allArticles[i]
+				}
+			}
+		}
+		allArticles = allArticles[:maxArticles]
+	}
+
+	log.Printf("Total articles fetched: %d", len(allArticles))
+	return allArticles, nil
+}
+
 // FetchAllFeeds fetches all active feeds for a user
 func (s *Service) FetchAllFeeds(ctx context.Context, db *sql.DB, userID int) error {
 	rows, err := db.QueryContext(ctx, `
@@ -135,20 +207,39 @@ func (s *Service) GenerateDailyDigests(ctx context.Context, db *sql.DB) error {
 
 // GenerateUserDigest generates a digest for a specific user
 func (s *Service) GenerateUserDigest(ctx context.Context, db *sql.DB, userID int) error {
-	// First, fetch latest articles
-	if err := s.FetchAllFeeds(ctx, db, userID); err != nil {
-		return fmt.Errorf("error fetching feeds: %w", err)
+	log.Printf("Starting digest generation for user %d", userID)
+	
+	// Generate a fresh digest every time (no daily limit with local LLM)
+	today := time.Now().Truncate(24 * time.Hour)
+	
+	// Only fetch feeds if they haven't been updated recently (within last hour)
+	shouldFetchFeeds := true
+	var lastFeedUpdate time.Time
+	err := db.QueryRowContext(ctx, `
+		SELECT MAX(updated_at) FROM feeds WHERE user_id = $1
+	`, userID).Scan(&lastFeedUpdate)
+	
+	if err == nil && time.Since(lastFeedUpdate) < time.Hour {
+		log.Printf("Feeds were updated recently for user %d, skipping feed fetch", userID)
+		shouldFetchFeeds = false
+	}
+	
+	if shouldFetchFeeds {
+		log.Printf("Fetching fresh RSS feeds for user %d", userID)
+		if err := s.FetchAllFeeds(ctx, db, userID); err != nil {
+			return fmt.Errorf("error fetching feeds: %w", err)
+		}
 	}
 
-	// Get articles from the last 24 hours
-	yesterday := time.Now().Add(-24 * time.Hour)
+	// Get articles from the last 30 days for a comprehensive digest from all feeds
+	lastMonth := time.Now().Add(-30 * 24 * time.Hour)
 	rows, err := db.QueryContext(ctx, `
 		SELECT a.id, a.title, a.description, a.content, a.link, a.author, a.published_at
 		FROM articles a
 		JOIN feeds f ON a.feed_id = f.id
 		WHERE f.user_id = $1 AND a.published_at > $2
 		ORDER BY a.published_at DESC
-	`, userID, yesterday)
+	`, userID, lastMonth)
 	if err != nil {
 		return err
 	}
@@ -168,14 +259,17 @@ func (s *Service) GenerateUserDigest(ctx context.Context, db *sql.DB, userID int
 		return nil
 	}
 
+	log.Printf("Generating AI summary for user %d with %d articles", userID, len(articles))
+	
 	// Generate AI summary
 	summary, err := s.aiService.SummarizeArticles(ctx, articles)
 	if err != nil {
 		return fmt.Errorf("error generating summary: %w", err)
 	}
+	
+	log.Printf("Successfully generated digest for user %d", userID)
 
-	// Create digest
-	today := time.Now().Truncate(24 * time.Hour)
+	// Create digest (reuse today variable from earlier)
 	var digestID int
 	err = db.QueryRowContext(ctx, `
 		INSERT INTO digests (user_id, date, summary)

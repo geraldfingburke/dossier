@@ -1,63 +1,76 @@
 package graphql
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"log"
-	"net/http"
-	"os"
-	"strings"
 
 	"github.com/geraldfingburke/dossier/server/internal/ai"
-	"github.com/geraldfingburke/dossier/server/internal/auth"
+	"github.com/geraldfingburke/dossier/server/internal/email"
 	"github.com/geraldfingburke/dossier/server/internal/models"
 	"github.com/geraldfingburke/dossier/server/internal/rss"
+	"github.com/geraldfingburke/dossier/server/internal/scheduler"
 	"github.com/graphql-go/graphql"
 	"github.com/graphql-go/handler"
+	"github.com/lib/pq"
 )
 
 // Handler creates the GraphQL HTTP handler
-func NewHandler(db *sql.DB, rssService *rss.Service, aiService *ai.Service) http.Handler {
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		jwtSecret = "development-secret-key-change-in-production"
-		log.Println("WARNING: Using default JWT secret. Set JWT_SECRET environment variable in production!")
-	}
-	authService := auth.NewService(jwtSecret)
-
-	// Define GraphQL types
-	userType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "User",
+func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailService *email.Service, schedulerService *scheduler.Service) (*handler.Handler, error) {
+	// DossierConfig GraphQL type
+	dossierConfigType := graphql.NewObject(graphql.ObjectConfig{
+		Name: "DossierConfig",
 		Fields: graphql.Fields{
 			"id": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.ID),
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"title": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
 			},
 			"email": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.String),
 			},
-			"name": &graphql.Field{
+			"feedUrls": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.String)),
+			},
+			"articleCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"frequency": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.String),
 			},
-			"createdAt": &graphql.Field{
+			"deliveryTime": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					var config *models.DossierConfig
+					
+					// Handle both pointer and value types
+					switch v := p.Source.(type) {
+					case *models.DossierConfig:
+						config = v
+					case models.DossierConfig:
+						config = &v
+					default:
+						return nil, fmt.Errorf("unexpected source type: %T", v)
+					}
+					
+					// Extract HH:MM from HH:MM:SS format
+					if len(config.DeliveryTime) >= 5 && config.DeliveryTime[2] == ':' {
+						return config.DeliveryTime[:5], nil
+					}
+					return config.DeliveryTime, nil
+				},
+			},
+			"timezone": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.String),
 			},
-		},
-	})
-
-	feedType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "Feed",
-		Fields: graphql.Fields{
-			"id": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.ID),
-			},
-			"url": &graphql.Field{
+			"tone": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.String),
 			},
-			"title": &graphql.Field{
-				Type: graphql.String,
+			"language": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
 			},
-			"description": &graphql.Field{
+			"specialInstructions": &graphql.Field{
 				Type: graphql.String,
 			},
 			"active": &graphql.Field{
@@ -66,532 +79,394 @@ func NewHandler(db *sql.DB, rssService *rss.Service, aiService *ai.Service) http
 			"createdAt": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.String),
 			},
-			"updatedAt": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.String),
-			},
 		},
 	})
 
-	articleType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "Article",
-		Fields: graphql.Fields{
-			"id": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.ID),
-			},
-			"feedId": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.ID),
-			},
-			"title": &graphql.Field{
+	// DossierConfigInput input type
+	dossierConfigInputType := graphql.NewInputObject(graphql.InputObjectConfig{
+		Name: "DossierConfigInput",
+		Fields: graphql.InputObjectConfigFieldMap{
+			"title": &graphql.InputObjectFieldConfig{
 				Type: graphql.NewNonNull(graphql.String),
 			},
-			"link": &graphql.Field{
+			"email": &graphql.InputObjectFieldConfig{
 				Type: graphql.NewNonNull(graphql.String),
 			},
-			"description": &graphql.Field{
+			"feedUrls": &graphql.InputObjectFieldConfig{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.String)),
+			},
+			"articleCount": &graphql.InputObjectFieldConfig{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"frequency": &graphql.InputObjectFieldConfig{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"deliveryTime": &graphql.InputObjectFieldConfig{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"timezone": &graphql.InputObjectFieldConfig{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"tone": &graphql.InputObjectFieldConfig{
 				Type: graphql.String,
 			},
-			"content": &graphql.Field{
+			"language": &graphql.InputObjectFieldConfig{
 				Type: graphql.String,
 			},
-			"author": &graphql.Field{
+			"specialInstructions": &graphql.InputObjectFieldConfig{
 				Type: graphql.String,
 			},
-			"publishedAt": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.String),
-			},
-			"createdAt": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.String),
-			},
 		},
 	})
 
-	digestType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "Digest",
+	// SchedulerStatus GraphQL type
+	schedulerStatusType := graphql.NewObject(graphql.ObjectConfig{
+		Name: "SchedulerStatus",
 		Fields: graphql.Fields{
-			"id": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.ID),
+			"running": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Boolean),
 			},
-			"userId": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.ID),
+			"nextCheck": &graphql.Field{
+				Type: graphql.String,
 			},
-			"date": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.String),
-			},
-			"summary": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.String),
-			},
-			"articles": &graphql.Field{
-				Type: graphql.NewList(graphql.NewNonNull(articleType)),
-				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-					digest, ok := p.Source.(*models.Digest)
-					if !ok {
-						return nil, fmt.Errorf("invalid source type")
-					}
-
-					rows, err := db.Query(`
-						SELECT a.id, a.feed_id, a.title, a.link, a.description, a.content, a.author, a.published_at, a.created_at
-						FROM articles a
-						JOIN digest_articles da ON a.id = da.article_id
-						WHERE da.digest_id = $1
-						ORDER BY a.published_at DESC
-					`, digest.ID)
-					if err != nil {
-						return nil, err
-					}
-					defer rows.Close()
-
-					var articles []models.Article
-					for rows.Next() {
-						var article models.Article
-						if err := rows.Scan(&article.ID, &article.FeedID, &article.Title, &article.Link, &article.Description, &article.Content, &article.Author, &article.PublishedAt, &article.CreatedAt); err != nil {
-							return nil, err
-						}
-						articles = append(articles, article)
-					}
-					return articles, nil
-				},
-			},
-			"createdAt": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.String),
+			"activeDossiers": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
 			},
 		},
 	})
 
-	authPayloadType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "AuthPayload",
-		Fields: graphql.Fields{
-			"token": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.String),
-			},
-			"user": &graphql.Field{
-				Type: graphql.NewNonNull(userType),
-			},
-		},
-	})
-
-	// Define Query type
-	queryType := graphql.NewObject(graphql.ObjectConfig{
+	// Define the root query
+	rootQuery := graphql.NewObject(graphql.ObjectConfig{
 		Name: "Query",
 		Fields: graphql.Fields{
-			"me": &graphql.Field{
-				Type: userType,
+			"dossierConfigs": &graphql.Field{
+				Type: graphql.NewList(dossierConfigType),
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-					userID, ok := auth.GetUserFromContext(p.Context)
-					if !ok {
-						return nil, fmt.Errorf("unauthorized")
-					}
-
-					var user models.User
-					err := db.QueryRowContext(p.Context, `
-						SELECT id, email, name, created_at, updated_at
-						FROM users WHERE id = $1
-					`, userID).Scan(&user.ID, &user.Email, &user.Name, &user.CreatedAt, &user.UpdatedAt)
-					if err != nil {
-						return nil, err
-					}
-					return user, nil
-				},
-			},
-			"feeds": &graphql.Field{
-				Type: graphql.NewList(graphql.NewNonNull(feedType)),
-				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-					userID, ok := auth.GetUserFromContext(p.Context)
-					if !ok {
-						return nil, fmt.Errorf("unauthorized")
-					}
-
 					rows, err := db.QueryContext(p.Context, `
-						SELECT id, user_id, url, title, description, active, created_at, updated_at
-						FROM feeds WHERE user_id = $1
+						SELECT id, title, email, feed_urls, article_count, frequency, 
+							   delivery_time::text, timezone, tone, language, special_instructions, 
+							   active, created_at
+						FROM dossier_configs
+						WHERE active = true
 						ORDER BY created_at DESC
-					`, userID)
+					`)
 					if err != nil {
 						return nil, err
 					}
 					defer rows.Close()
 
-					var feeds []models.Feed
+					var configs []models.DossierConfig
 					for rows.Next() {
-						var feed models.Feed
-						if err := rows.Scan(&feed.ID, &feed.UserID, &feed.URL, &feed.Title, &feed.Description, &feed.Active, &feed.CreatedAt, &feed.UpdatedAt); err != nil {
+						var config models.DossierConfig
+						err := rows.Scan(&config.ID, &config.Title, &config.Email, pq.Array(&config.FeedURLs), 
+							&config.ArticleCount, &config.Frequency, &config.DeliveryTime, 
+							&config.Timezone, &config.Tone, &config.Language, 
+							&config.SpecialInstructions, &config.Active, &config.CreatedAt)
+						if err != nil {
 							return nil, err
 						}
-						feeds = append(feeds, feed)
+						configs = append(configs, config)
 					}
-					return feeds, nil
+					return configs, nil
 				},
 			},
-			"articles": &graphql.Field{
-				Type: graphql.NewList(graphql.NewNonNull(articleType)),
-				Args: graphql.FieldConfigArgument{
-					"limit": &graphql.ArgumentConfig{
-						Type:         graphql.Int,
-						DefaultValue: 50,
-					},
-					"offset": &graphql.ArgumentConfig{
-						Type:         graphql.Int,
-						DefaultValue: 0,
-					},
-				},
-				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-					userID, ok := auth.GetUserFromContext(p.Context)
-					if !ok {
-						return nil, fmt.Errorf("unauthorized")
-					}
-
-					limit := p.Args["limit"].(int)
-					offset := p.Args["offset"].(int)
-
-					rows, err := db.QueryContext(p.Context, `
-						SELECT a.id, a.feed_id, a.title, a.link, a.description, a.content, a.author, a.published_at, a.created_at
-						FROM articles a
-						JOIN feeds f ON a.feed_id = f.id
-						WHERE f.user_id = $1
-						ORDER BY a.published_at DESC
-						LIMIT $2 OFFSET $3
-					`, userID, limit, offset)
-					if err != nil {
-						return nil, err
-					}
-					defer rows.Close()
-
-					var articles []models.Article
-					for rows.Next() {
-						var article models.Article
-						if err := rows.Scan(&article.ID, &article.FeedID, &article.Title, &article.Link, &article.Description, &article.Content, &article.Author, &article.PublishedAt, &article.CreatedAt); err != nil {
-							return nil, err
-						}
-						articles = append(articles, article)
-					}
-					return articles, nil
-				},
-			},
-			"digests": &graphql.Field{
-				Type: graphql.NewList(graphql.NewNonNull(digestType)),
-				Args: graphql.FieldConfigArgument{
-					"limit": &graphql.ArgumentConfig{
-						Type:         graphql.Int,
-						DefaultValue: 10,
-					},
-				},
-				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-					userID, ok := auth.GetUserFromContext(p.Context)
-					if !ok {
-						return nil, fmt.Errorf("unauthorized")
-					}
-
-					limit := p.Args["limit"].(int)
-
-					rows, err := db.QueryContext(p.Context, `
-						SELECT id, user_id, date, summary, created_at
-						FROM digests
-						WHERE user_id = $1
-						ORDER BY date DESC
-						LIMIT $2
-					`, userID, limit)
-					if err != nil {
-						return nil, err
-					}
-					defer rows.Close()
-
-					var digests []*models.Digest
-					for rows.Next() {
-						var digest models.Digest
-						if err := rows.Scan(&digest.ID, &digest.UserID, &digest.Date, &digest.Summary, &digest.CreatedAt); err != nil {
-							return nil, err
-						}
-						digests = append(digests, &digest)
-					}
-					return digests, nil
-				},
-			},
-			"latestDigest": &graphql.Field{
-				Type: digestType,
-				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-					userID, ok := auth.GetUserFromContext(p.Context)
-					if !ok {
-						return nil, fmt.Errorf("unauthorized")
-					}
-
-					var digest models.Digest
-					err := db.QueryRowContext(p.Context, `
-						SELECT id, user_id, date, summary, created_at
-						FROM digests
-						WHERE user_id = $1
-						ORDER BY date DESC
-						LIMIT 1
-					`, userID).Scan(&digest.ID, &digest.UserID, &digest.Date, &digest.Summary, &digest.CreatedAt)
-					if err != nil {
-						if err == sql.ErrNoRows {
-							return nil, nil
-						}
-						return nil, err
-					}
-					return &digest, nil
-				},
-			},
-		},
-	})
-
-	// Define Mutation type
-	mutationType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "Mutation",
-		Fields: graphql.Fields{
-			"register": &graphql.Field{
-				Type: graphql.NewNonNull(authPayloadType),
-				Args: graphql.FieldConfigArgument{
-					"email": &graphql.ArgumentConfig{
-						Type: graphql.NewNonNull(graphql.String),
-					},
-					"password": &graphql.ArgumentConfig{
-						Type: graphql.NewNonNull(graphql.String),
-					},
-					"name": &graphql.ArgumentConfig{
-						Type: graphql.NewNonNull(graphql.String),
-					},
-				},
-				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-					email := p.Args["email"].(string)
-					password := p.Args["password"].(string)
-					name := p.Args["name"].(string)
-
-					user, err := authService.Register(p.Context, db, email, password, name)
-					if err != nil {
-						return nil, err
-					}
-
-					token, _, err := authService.Login(p.Context, db, email, password)
-					if err != nil {
-						return nil, err
-					}
-
-					return map[string]interface{}{
-						"token": token,
-						"user":  user,
-					}, nil
-				},
-			},
-			"login": &graphql.Field{
-				Type: graphql.NewNonNull(authPayloadType),
-				Args: graphql.FieldConfigArgument{
-					"email": &graphql.ArgumentConfig{
-						Type: graphql.NewNonNull(graphql.String),
-					},
-					"password": &graphql.ArgumentConfig{
-						Type: graphql.NewNonNull(graphql.String),
-					},
-				},
-				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-					email := p.Args["email"].(string)
-					password := p.Args["password"].(string)
-
-					token, user, err := authService.Login(p.Context, db, email, password)
-					if err != nil {
-						return nil, err
-					}
-
-					return map[string]interface{}{
-						"token": token,
-						"user":  user,
-					}, nil
-				},
-			},
-			"addFeed": &graphql.Field{
-				Type: graphql.NewNonNull(feedType),
-				Args: graphql.FieldConfigArgument{
-					"url": &graphql.ArgumentConfig{
-						Type: graphql.NewNonNull(graphql.String),
-					},
-				},
-				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-					userID, ok := auth.GetUserFromContext(p.Context)
-					if !ok {
-						return nil, fmt.Errorf("unauthorized")
-					}
-
-					url := p.Args["url"].(string)
-
-					// Try to fetch the feed to validate it
-					feed, err := rssService.FetchFeed(p.Context, url)
-					if err != nil {
-						return nil, fmt.Errorf("invalid feed URL: %w", err)
-					}
-
-					// Save feed to database
-					var dbFeed models.Feed
-					err = db.QueryRowContext(p.Context, `
-						INSERT INTO feeds (user_id, url, title, description, active)
-						VALUES ($1, $2, $3, $4, true)
-						RETURNING id, user_id, url, title, description, active, created_at, updated_at
-					`, userID, url, feed.Title, feed.Description).Scan(
-						&dbFeed.ID, &dbFeed.UserID, &dbFeed.URL, &dbFeed.Title,
-						&dbFeed.Description, &dbFeed.Active, &dbFeed.CreatedAt, &dbFeed.UpdatedAt,
-					)
-					if err != nil {
-						return nil, err
-					}
-
-					// Fetch initial articles
-					go func() {
-						if err := rssService.SaveArticles(db, dbFeed.ID, feed.Items); err != nil {
-							fmt.Printf("Error saving initial articles: %v\n", err)
-						}
-					}()
-
-					return dbFeed, nil
-				},
-			},
-			"deleteFeed": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.Boolean),
+			"dossierConfig": &graphql.Field{
+				Type: dossierConfigType,
 				Args: graphql.FieldConfigArgument{
 					"id": &graphql.ArgumentConfig{
 						Type: graphql.NewNonNull(graphql.ID),
 					},
 				},
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-					userID, ok := auth.GetUserFromContext(p.Context)
-					if !ok {
-						return false, fmt.Errorf("unauthorized")
-					}
-
-					feedID := p.Args["id"].(string)
-
-					result, err := db.ExecContext(p.Context, `
-						DELETE FROM feeds WHERE id = $1 AND user_id = $2
-					`, feedID, userID)
-					if err != nil {
-						return false, err
-					}
-
-					rows, err := result.RowsAffected()
-					if err != nil {
-						return false, err
-					}
-
-					return rows > 0, nil
-				},
-			},
-			"refreshAllFeeds": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.Boolean),
-				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-					userID, ok := auth.GetUserFromContext(p.Context)
-					if !ok {
-						return false, fmt.Errorf("unauthorized")
-					}
-
-					go func() {
-						ctx := context.Background()
-						if err := rssService.FetchAllFeeds(ctx, db, userID); err != nil {
-							fmt.Printf("Error refreshing feeds: %v\n", err)
-						}
-					}()
-
-					return true, nil
-				},
-			},
-			"generateDigest": &graphql.Field{
-				Type: graphql.NewNonNull(digestType),
-				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-					userID, ok := auth.GetUserFromContext(p.Context)
-					if !ok {
-						return nil, fmt.Errorf("unauthorized")
-					}
-
-					if err := rssService.GenerateUserDigest(p.Context, db, userID); err != nil {
-						return nil, err
-					}
-
-					// Fetch the latest digest
-					var digest models.Digest
+					id := p.Args["id"].(string)
+					
+					var config models.DossierConfig
 					err := db.QueryRowContext(p.Context, `
-						SELECT id, user_id, date, summary, created_at
-						FROM digests
-						WHERE user_id = $1
-						ORDER BY date DESC
-						LIMIT 1
-					`, userID).Scan(&digest.ID, &digest.UserID, &digest.Date, &digest.Summary, &digest.CreatedAt)
+						SELECT id, title, email, feed_urls, article_count, frequency, 
+							   delivery_time::text, timezone, tone, language, special_instructions, 
+							   active, created_at
+						FROM dossier_configs WHERE id = $1
+					`, id).Scan(&config.ID, &config.Title, &config.Email, pq.Array(&config.FeedURLs),
+						&config.ArticleCount, &config.Frequency, &config.DeliveryTime,
+						&config.Timezone, &config.Tone, &config.Language,
+						&config.SpecialInstructions, &config.Active, &config.CreatedAt)
+					if err != nil {
+						if err == sql.ErrNoRows {
+							return nil, nil
+						}
+						return nil, err
+					}
+					return &config, nil
+				},
+			},
+			"schedulerStatus": &graphql.Field{
+				Type: schedulerStatusType,
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					// Count active dossier configs
+					var activeCount int
+					err := db.QueryRowContext(p.Context, `
+						SELECT COUNT(*) FROM dossier_configs WHERE active = true
+					`).Scan(&activeCount)
 					if err != nil {
 						return nil, err
 					}
 
-					return &digest, nil
+					return map[string]interface{}{
+						"running":        schedulerService.IsRunning(),
+						"nextCheck":      nil, // TODO: implement next check time
+						"activeDossiers": activeCount,
+					}, nil
 				},
 			},
 		},
 	})
 
-	// Create schema
+	// Define the root mutation
+	rootMutation := graphql.NewObject(graphql.ObjectConfig{
+		Name: "Mutation",
+		Fields: graphql.Fields{
+			"createDossierConfig": &graphql.Field{
+				Type: dossierConfigType,
+				Args: graphql.FieldConfigArgument{
+					"input": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(dossierConfigInputType),
+					},
+				},
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					input := p.Args["input"].(map[string]interface{})
+					
+					title := input["title"].(string)
+					email := input["email"].(string)
+					feedUrls := input["feedUrls"].([]interface{})
+					articleCount := input["articleCount"].(int)
+					frequency := input["frequency"].(string)
+					deliveryTime := input["deliveryTime"].(string)
+					timezone := input["timezone"].(string)
+					
+					// Handle optional fields with defaults
+					tone := "professional"
+					if input["tone"] != nil {
+						tone = input["tone"].(string)
+					}
+					
+					language := "English"
+					if input["language"] != nil {
+						language = input["language"].(string)
+					}
+					
+					specialInstructions := ""
+					if input["specialInstructions"] != nil {
+						specialInstructions = input["specialInstructions"].(string)
+					}
+
+					// Convert feedUrls from []interface{} to []string
+					feedURLStrings := make([]string, len(feedUrls))
+					for i, url := range feedUrls {
+						feedURLStrings[i] = url.(string)
+					}
+
+					var config models.DossierConfig
+					err := db.QueryRowContext(p.Context, `
+						INSERT INTO dossier_configs (title, email, feed_urls, article_count, frequency, 
+							delivery_time, timezone, tone, language, special_instructions)
+						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+						RETURNING id, title, email, feed_urls, article_count, frequency, 
+							delivery_time, timezone, tone, language, special_instructions, 
+							active, created_at
+					`, title, email, pq.Array(feedURLStrings), articleCount, frequency, deliveryTime, 
+						timezone, tone, language, specialInstructions).Scan(
+							&config.ID, &config.Title, &config.Email, pq.Array(&config.FeedURLs), 
+							&config.ArticleCount, &config.Frequency, &config.DeliveryTime, 
+							&config.Timezone, &config.Tone, &config.Language, 
+							&config.SpecialInstructions, &config.Active, &config.CreatedAt)
+					if err != nil {
+						return nil, err
+					}
+
+					log.Printf("Created new dossier config: %s", config.Title)
+					return &config, nil
+				},
+			},
+			"updateDossierConfig": &graphql.Field{
+				Type: dossierConfigType,
+				Args: graphql.FieldConfigArgument{
+					"id": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.ID),
+					},
+					"input": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(dossierConfigInputType),
+					},
+				},
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					id := p.Args["id"].(string)
+					input := p.Args["input"].(map[string]interface{})
+					
+					title := input["title"].(string)
+					email := input["email"].(string)
+					feedUrls := input["feedUrls"].([]interface{})
+					articleCount := input["articleCount"].(int)
+					frequency := input["frequency"].(string)
+					deliveryTime := input["deliveryTime"].(string)
+					timezone := input["timezone"].(string)
+					
+					// Handle optional fields with defaults
+					tone := "professional"
+					if input["tone"] != nil {
+						tone = input["tone"].(string)
+					}
+					
+					language := "English"
+					if input["language"] != nil {
+						language = input["language"].(string)
+					}
+					
+					specialInstructions := ""
+					if input["specialInstructions"] != nil {
+						specialInstructions = input["specialInstructions"].(string)
+					}
+					
+					// Convert feedUrls from []interface{} to []string
+					feedURLStrings := make([]string, len(feedUrls))
+					for i, url := range feedUrls {
+						feedURLStrings[i] = url.(string)
+					}
+
+					var config models.DossierConfig
+					err := db.QueryRowContext(p.Context, `
+						UPDATE dossier_configs 
+						SET title = $2, email = $3, feed_urls = $4, article_count = $5, 
+							frequency = $6, delivery_time = $7, timezone = $8, tone = $9, 
+							language = $10, special_instructions = $11, updated_at = CURRENT_TIMESTAMP
+						WHERE id = $1
+						RETURNING id, title, email, feed_urls, article_count, frequency, 
+							delivery_time::text, timezone, tone, language, special_instructions, 
+							active, created_at
+					`, id, title, email, pq.Array(feedURLStrings), articleCount, frequency, deliveryTime, 
+						timezone, tone, language, specialInstructions).Scan(
+
+						&config.ID, &config.Title, &config.Email, pq.Array(&config.FeedURLs), 
+						&config.ArticleCount, &config.Frequency, &config.DeliveryTime, 
+						&config.Timezone, &config.Tone, &config.Language, 
+						&config.SpecialInstructions, &config.Active, &config.CreatedAt)
+					if err != nil {
+						return nil, err
+					}
+
+					log.Printf("Updated dossier config: %s", config.Title)
+					return &config, nil
+				},
+			},
+			"deleteDossierConfig": &graphql.Field{
+				Type: graphql.Boolean,
+				Args: graphql.FieldConfigArgument{
+					"id": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.ID),
+					},
+				},
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					id := p.Args["id"].(string)
+					
+					_, err := db.ExecContext(p.Context, "DELETE FROM dossier_configs WHERE id = $1", id)
+					if err != nil {
+						return false, err
+					}
+
+					log.Printf("Deleted dossier config ID: %s", id)
+					return true, nil
+				},
+			},
+			"generateAndSendDossier": &graphql.Field{
+				Type: graphql.Boolean,
+				Args: graphql.FieldConfigArgument{
+					"configId": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.ID),
+					},
+				},
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					configId := p.Args["configId"].(string)
+					
+					// Get dossier config
+					var config models.DossierConfig
+					err := db.QueryRowContext(p.Context, `
+						SELECT id, title, email, feed_urls, article_count, frequency, 
+							   delivery_time::text, timezone, tone, language, special_instructions, 
+							   active, created_at
+						FROM dossier_configs WHERE id = $1 AND active = true
+					`, configId).Scan(&config.ID, &config.Title, &config.Email, pq.Array(&config.FeedURLs),
+						&config.ArticleCount, &config.Frequency, &config.DeliveryTime,
+						&config.Timezone, &config.Tone, &config.Language,
+						&config.SpecialInstructions, &config.Active, &config.CreatedAt)
+					if err != nil {
+						if err == sql.ErrNoRows {
+							return false, fmt.Errorf("dossier configuration not found or inactive")
+						}
+						return false, err
+					}
+
+					// Fetch articles from RSS feeds
+					articles, err := rssService.FetchArticlesFromFeeds(p.Context, config.FeedURLs, config.ArticleCount)
+					if err != nil {
+						return false, fmt.Errorf("failed to fetch articles: %w", err)
+					}
+
+					if len(articles) == 0 {
+						return false, fmt.Errorf("no articles found from the configured feeds")
+					}
+
+					// Generate AI summary
+					summary, err := aiService.GenerateSummary(p.Context, articles, config.Tone, config.Language, config.SpecialInstructions)
+					if err != nil {
+						return false, fmt.Errorf("failed to generate summary: %w", err)
+					}
+
+					// Send email
+					err = emailService.SendDossier(&config, summary, articles)
+					if err != nil {
+						return false, fmt.Errorf("failed to send dossier email: %w", err)
+					}
+
+					// Record delivery in database
+					_, err = db.ExecContext(p.Context, `
+						INSERT INTO dossier_deliveries (config_id, delivery_date, summary, article_count, email_sent)
+						VALUES ($1, CURRENT_TIMESTAMP, $2, $3, true)
+					`, config.ID, summary, len(articles))
+					if err != nil {
+						log.Printf("Failed to record dossier delivery: %v", err)
+					}
+
+					log.Printf("Successfully generated and sent dossier '%s' to %s", config.Title, config.Email)
+					return true, nil
+				},
+			},
+			"testEmailConnection": &graphql.Field{
+				Type: graphql.Boolean,
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					err := emailService.TestSMTPConnection()
+					if err != nil {
+						log.Printf("SMTP test failed: %v", err)
+						return false, err
+					}
+					return true, nil
+				},
+			},
+		},
+	})
+
+	// Create GraphQL schema
 	schema, err := graphql.NewSchema(graphql.SchemaConfig{
-		Query:    queryType,
-		Mutation: mutationType,
+		Query:    rootQuery,
+		Mutation: rootMutation,
 	})
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to create GraphQL schema: %w", err)
 	}
 
-	// Create handler with authentication middleware
-	return &authMiddleware{
-		authService: authService,
-		handler: handler.New(&handler.Config{
-			Schema:   &schema,
-			Pretty:   true,
-			GraphiQL: false,
-		}),
-	}
+	// Create GraphQL handler
+	h := handler.New(&handler.Config{
+		Schema:   &schema,
+		Pretty:   true,
+		GraphiQL: true,
+	})
+
+	return h, nil
 }
-
-// authMiddleware handles authentication
-type authMiddleware struct {
-	authService *auth.Service
-	handler     *handler.Handler
-}
-
-func (m *authMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Extract token from Authorization header
-	authHeader := r.Header.Get("Authorization")
-	if authHeader != "" {
-		parts := strings.Split(authHeader, " ")
-		if len(parts) == 2 && parts[0] == "Bearer" {
-			userID, err := m.authService.ValidateToken(parts[1])
-			if err == nil {
-				ctx := context.WithValue(r.Context(), "user_id", userID)
-				r = r.WithContext(ctx)
-			}
-		}
-	}
-
-	m.handler.ServeHTTP(w, r)
-}
-
-// PlaygroundHandler returns the GraphQL playground handler
-func PlaygroundHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(playgroundHTML))
-	}
-}
-
-const playgroundHTML = `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>GraphQL Playground</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/graphql-playground-react/build/static/css/index.css" />
-  <link rel="shortcut icon" href="https://cdn.jsdelivr.net/npm/graphql-playground-react/build/favicon.png" />
-  <script src="https://cdn.jsdelivr.net/npm/graphql-playground-react/build/static/js/middleware.js"></script>
-</head>
-<body>
-  <div id="root"></div>
-  <script>
-    window.addEventListener('load', function (event) {
-      GraphQLPlayground.init(document.getElementById('root'), {
-        endpoint: '/graphql',
-        settings: {
-          'request.credentials': 'include',
-        }
-      })
-    })
-  </script>
-</body>
-</html>
-`

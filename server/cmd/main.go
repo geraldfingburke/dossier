@@ -13,6 +13,8 @@ import (
 	"github.com/geraldfingburke/dossier/server/internal/graphql"
 	"github.com/geraldfingburke/dossier/server/internal/rss"
 	"github.com/geraldfingburke/dossier/server/internal/ai"
+	"github.com/geraldfingburke/dossier/server/internal/email"
+	"github.com/geraldfingburke/dossier/server/internal/scheduler"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -33,7 +35,9 @@ func main() {
 
 	// Initialize services
 	aiService := ai.NewService()
+	emailService := email.NewService()
 	rssService := rss.NewService(aiService)
+	schedulerService := scheduler.NewService(db, rssService, aiService, emailService)
 	
 	// Create router
 	r := chi.NewRouter()
@@ -51,9 +55,11 @@ func main() {
 	}))
 
 	// GraphQL handler
-	gqlHandler := graphql.NewHandler(db, rssService, aiService)
+	gqlHandler, err := graphql.Handler(db, rssService, aiService, emailService, schedulerService)
+	if err != nil {
+		log.Fatalf("Failed to create GraphQL handler: %v", err)
+	}
 	r.Handle("/graphql", gqlHandler)
-	r.Get("/graphql/playground", graphql.PlaygroundHandler())
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -70,23 +76,13 @@ func main() {
 	srv := &http.Server{
 		Addr:         ":" + port,
 		Handler:      r,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 10 * time.Minute, // Extended for AI operations
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Start background scheduler for daily digests
-	go func() {
-		ticker := time.NewTicker(24 * time.Hour)
-		defer ticker.Stop()
-		
-		for range ticker.C {
-			log.Println("Running daily digest generation...")
-			if err := rssService.GenerateDailyDigests(context.Background(), db); err != nil {
-				log.Printf("Error generating daily digests: %v", err)
-			}
-		}
-	}()
+	// Start the dossier scheduler
+	schedulerService.Start()
 
 	// Graceful shutdown
 	go func() {
@@ -102,6 +98,9 @@ func main() {
 	<-quit
 
 	log.Println("Server shutting down...")
+	
+	// Stop the scheduler
+	schedulerService.Stop()
 	
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

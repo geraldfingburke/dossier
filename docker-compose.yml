@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   postgres:
@@ -25,9 +25,20 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/dossier?sslmode=disable
       - PORT=8080
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OLLAMA_URL=http://ollama:11434
+      - USE_LOCAL_LLM=true
+      # SMTP Configuration
+      - SMTP_HOST=${SMTP_HOST:-localhost}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-dossier@localhost}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Dossier}
     depends_on:
       postgres:
         condition: service_healthy
+      ollama:
+        condition: service_started
     restart: unless-stopped
 
   frontend:
@@ -43,5 +54,25 @@ services:
     environment:
       - NODE_ENV=development
 
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    restart: unless-stopped
+
+  # MailHog - Local email testing (optional)
+  # Uncomment this service to test emails locally without sending real emails
+  # mailhog:
+  #   image: mailhog/mailhog:latest
+  #   ports:
+  #     - "1025:1025"   # SMTP server
+  #     - "8025:8025"   # Web interface
+  #   restart: unless-stopped
+
 volumes:
   postgres_data:
+  ollama_data:

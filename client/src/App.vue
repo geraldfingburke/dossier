@@ -1,68 +1,29 @@
 <template>
   <div id="app">
-    <header v-if="store.user">
-      <div class="container">
-        <h1>📰 Dossier</h1>
-        <nav>
-          <button @click="currentView = 'feeds'" :class="{ active: currentView === 'feeds' }">
-            Feeds
-          </button>
-          <button @click="currentView = 'articles'" :class="{ active: currentView === 'articles' }">
-            Articles
-          </button>
-          <button @click="currentView = 'digests'" :class="{ active: currentView === 'digests' }">
-            Digests
-          </button>
-          <button @click="logout" class="logout">Logout</button>
-        </nav>
+    <header>
+      <div class="header-container">
+        <div class="logo">
+          <h1>📰 Dossier</h1>
+          <span class="subtitle">An AI RSS Digest</span>
+        </div>
       </div>
     </header>
 
-    <main class="container">
-      <LoginView v-if="!store.user" @login="handleLogin" />
-      <FeedsView v-else-if="currentView === 'feeds'" />
-      <ArticlesView v-else-if="currentView === 'articles'" />
-      <DigestsView v-else-if="currentView === 'digests'" />
+    <main class="main-container">
+      <DossierConfigsView />
     </main>
   </div>
 </template>
 
 <script>
-import { reactive, ref } from 'vue'
-import LoginView from './views/LoginView.vue'
-import FeedsView from './views/FeedsView.vue'
-import ArticlesView from './views/ArticlesView.vue'
-import DigestsView from './views/DigestsView.vue'
-import { useStore } from './store'
+import DossierConfigsView from "./views/DossierConfigsView.vue";
 
 export default {
-  name: 'App',
+  name: "App",
   components: {
-    LoginView,
-    FeedsView,
-    ArticlesView,
-    DigestsView
+    DossierConfigsView,
   },
-  setup() {
-    const store = useStore()
-    const currentView = ref('feeds')
-
-    const handleLogin = () => {
-      currentView.value = 'feeds'
-    }
-
-    const logout = () => {
-      store.logout()
-    }
-
-    return {
-      store,
-      currentView,
-      handleLogin,
-      logout
-    }
-  }
-}
+};
 </script>
 
 <style>
@@ -73,122 +34,258 @@ export default {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  background: #f5f5f5;
-  color: #333;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, sans-serif;
+  background: #0a0a0b;
+  color: #e5e5e7;
   line-height: 1.6;
+  overflow-x: hidden;
 }
 
 #app {
   min-height: 100vh;
+  background: linear-gradient(135deg, #0a0a0b 0%, #1a1a1e 100%);
 }
 
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
-}
-
+/* Header Styles */
 header {
-  background: white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  background: rgba(26, 26, 30, 0.8);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   padding: 1rem 0;
-  margin-bottom: 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
-header .container {
+.header-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.logo {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
-h1 {
-  font-size: 1.5rem;
-  color: #2c3e50;
+.logo h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #60a5fa, #34d399);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-nav {
-  display: flex;
-  gap: 1rem;
+.subtitle {
+  font-size: 0.875rem;
+  color: rgba(229, 229, 231, 0.6);
+  font-weight: 400;
 }
 
+/* Main Content */
+.main-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* Global Components */
 button {
-  padding: 0.5rem 1rem;
+  padding: 0.75rem 1.5rem;
   border: none;
-  border-radius: 4px;
-  background: #e0e0e0;
+  border-radius: 0.75rem;
+  background: rgba(55, 65, 81, 0.8);
+  color: #e5e5e7;
   cursor: pointer;
-  font-size: 0.9rem;
-  transition: background 0.2s;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 button:hover {
-  background: #d0d0d0;
-}
-
-button.active {
-  background: #4CAF50;
-  color: white;
-}
-
-button.logout {
-  background: #f44336;
-  color: white;
-}
-
-button.logout:hover {
-  background: #d32f2f;
+  background: rgba(75, 85, 99, 0.9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 button.primary {
-  background: #4CAF50;
-  color: white;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 button.primary:hover {
-  background: #45a049;
+  background: linear-gradient(135deg, #2563eb, #1e40af);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
+}
+
+button.success {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+button.success:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+}
+
+button.danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+button.danger:hover {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  box-shadow: 0 8px 24px rgba(239, 68, 68, 0.3);
 }
 
 button:disabled {
-  background: #ccc;
+  background: rgba(55, 65, 81, 0.4);
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
-input, textarea {
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
+input,
+textarea,
+select {
+  padding: 0.875rem;
+  border: 1px solid rgba(55, 65, 81, 0.6);
+  border-radius: 0.75rem;
+  background: rgba(17, 17, 19, 0.8);
+  color: #e5e5e7;
+  font-size: 0.875rem;
   font-family: inherit;
   width: 100%;
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
 }
 
-input:focus, textarea:focus {
+input:focus,
+textarea:focus,
+select:focus {
   outline: none;
-  border-color: #4CAF50;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background: rgba(17, 17, 19, 0.9);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(229, 229, 231, 0.5);
 }
 
 .card {
-  background: white;
-  border-radius: 8px;
-  padding: 1.5rem;
-  margin-bottom: 1rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  background: rgba(26, 26, 30, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+  padding: 2rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .error {
-  color: #f44336;
-  background: #ffebee;
-  padding: 0.5rem;
-  border-radius: 4px;
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 1rem;
+  border-radius: 0.75rem;
   margin-bottom: 1rem;
+  backdrop-filter: blur(10px);
 }
 
 .success {
-  color: #4CAF50;
-  background: #e8f5e9;
-  padding: 0.5rem;
-  border-radius: 4px;
+  color: #86efac;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  padding: 1rem;
+  border-radius: 0.75rem;
   margin-bottom: 1rem;
+  backdrop-filter: blur(10px);
+}
+
+/* Loading Animation */
+.loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.loading::after {
+  content: "";
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Utility Classes */
+.text-sm {
+  font-size: 0.875rem;
+}
+
+.text-xs {
+  font-size: 0.75rem;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+.opacity-60 {
+  opacity: 0.6;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.gap-2 {
+  gap: 0.5rem;
+}
+
+.gap-4 {
+  gap: 1rem;
+}
+
+.mb-2 {
+  margin-bottom: 0.5rem;
+}
+
+.mb-4 {
+  margin-bottom: 1rem;
+}
+
+.mt-4 {
+  margin-top: 1rem;
 }
 </style>

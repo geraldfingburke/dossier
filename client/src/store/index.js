@@ -1,313 +1,242 @@
-import { reactive, inject } from 'vue'
-import { GraphQLClient } from 'graphql-request'
+import { reactive } from "vue";
 
-const API_URL = 'http://localhost:8080/graphql'
+const store = reactive({
+  // Application state
+  loading: false,
+  error: null,
+  dossierConfigs: [],
 
-export function createStore() {
-  const state = reactive({
-    user: null,
-    token: localStorage.getItem('token') || null,
-    feeds: [],
-    articles: [],
-    digests: [],
-    loading: false,
-    error: null
-  })
-
-  const client = new GraphQLClient(API_URL, {
-    headers: () => ({
-      Authorization: state.token ? `Bearer ${state.token}` : ''
-    })
-  })
-
-  async function login(email, password) {
+  // Dossier Configuration Methods
+  async getDossierConfigs() {
     try {
-      state.loading = true
-      state.error = null
-      
-      const mutation = `
-        mutation Login($email: String!, $password: String!) {
-          login(email: $email, password: $password) {
-            token
-            user {
-              id
-              email
-              name
+      const response = await fetch("/graphql", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: `
+            query GetDossierConfigs {
+              dossierConfigs {
+                id
+                title
+                email
+                feedUrls
+                articleCount
+                frequency
+                deliveryTime
+                timezone
+                tone
+                language
+                specialInstructions
+                active
+                createdAt
+              }
             }
-          }
-        }
-      `
-      
-      const data = await client.request(mutation, { email, password })
-      state.token = data.login.token
-      state.user = data.login.user
-      localStorage.setItem('token', data.login.token)
-    } catch (error) {
-      state.error = error.message
-      throw error
-    } finally {
-      state.loading = false
-    }
-  }
+          `,
+        }),
+      });
 
-  async function register(email, password, name) {
-    try {
-      state.loading = true
-      state.error = null
-      
-      const mutation = `
-        mutation Register($email: String!, $password: String!, $name: String!) {
-          register(email: $email, password: $password, name: $name) {
-            token
-            user {
-              id
-              email
-              name
-            }
-          }
-        }
-      `
-      
-      const data = await client.request(mutation, { email, password, name })
-      state.token = data.register.token
-      state.user = data.register.user
-      localStorage.setItem('token', data.register.token)
-    } catch (error) {
-      state.error = error.message
-      throw error
-    } finally {
-      state.loading = false
-    }
-  }
-
-  function logout() {
-    state.user = null
-    state.token = null
-    state.feeds = []
-    state.articles = []
-    state.digests = []
-    localStorage.removeItem('token')
-  }
-
-  async function fetchFeeds() {
-    try {
-      state.loading = true
-      const query = `
-        query {
-          feeds {
-            id
-            url
-            title
-            description
-            active
-            createdAt
-            updatedAt
-          }
-        }
-      `
-      
-      const data = await client.request(query)
-      state.feeds = data.feeds
-    } catch (error) {
-      state.error = error.message
-    } finally {
-      state.loading = false
-    }
-  }
-
-  async function addFeed(url) {
-    try {
-      state.loading = true
-      const mutation = `
-        mutation AddFeed($url: String!) {
-          addFeed(url: $url) {
-            id
-            url
-            title
-            description
-            active
-            createdAt
-            updatedAt
-          }
-        }
-      `
-      
-      const data = await client.request(mutation, { url })
-      state.feeds.unshift(data.addFeed)
-      return data.addFeed
-    } catch (error) {
-      state.error = error.message
-      throw error
-    } finally {
-      state.loading = false
-    }
-  }
-
-  async function deleteFeed(id) {
-    try {
-      state.loading = true
-      const mutation = `
-        mutation DeleteFeed($id: ID!) {
-          deleteFeed(id: $id)
-        }
-      `
-      
-      await client.request(mutation, { id })
-      state.feeds = state.feeds.filter(f => f.id !== id)
-    } catch (error) {
-      state.error = error.message
-      throw error
-    } finally {
-      state.loading = false
-    }
-  }
-
-  async function refreshAllFeeds() {
-    try {
-      state.loading = true
-      const mutation = `
-        mutation {
-          refreshAllFeeds
-        }
-      `
-      
-      await client.request(mutation)
-      // Refresh the feeds list after a short delay
-      setTimeout(() => fetchFeeds(), 2000)
-    } catch (error) {
-      state.error = error.message
-      throw error
-    } finally {
-      state.loading = false
-    }
-  }
-
-  async function fetchArticles(limit = 50, offset = 0) {
-    try {
-      state.loading = true
-      const query = `
-        query Articles($limit: Int, $offset: Int) {
-          articles(limit: $limit, offset: $offset) {
-            id
-            feedId
-            title
-            link
-            description
-            content
-            author
-            publishedAt
-            createdAt
-          }
-        }
-      `
-      
-      const data = await client.request(query, { limit, offset })
-      state.articles = data.articles
-    } catch (error) {
-      state.error = error.message
-    } finally {
-      state.loading = false
-    }
-  }
-
-  async function fetchDigests(limit = 10) {
-    try {
-      state.loading = true
-      const query = `
-        query Digests($limit: Int) {
-          digests(limit: $limit) {
-            id
-            userId
-            date
-            summary
-            createdAt
-            articles {
-              id
-              title
-              link
-              publishedAt
-            }
-          }
-        }
-      `
-      
-      const data = await client.request(query, { limit })
-      state.digests = data.digests
-    } catch (error) {
-      state.error = error.message
-    } finally {
-      state.loading = false
-    }
-  }
-
-  async function generateDigest() {
-    try {
-      state.loading = true
-      const mutation = `
-        mutation {
-          generateDigest {
-            id
-            userId
-            date
-            summary
-            createdAt
-            articles {
-              id
-              title
-              link
-              publishedAt
-            }
-          }
-        }
-      `
-      
-      const data = await client.request(mutation)
-      state.digests.unshift(data.generateDigest)
-      return data.generateDigest
-    } catch (error) {
-      state.error = error.message
-      throw error
-    } finally {
-      state.loading = false
-    }
-  }
-
-  // Initialize user if token exists
-  if (state.token) {
-    const query = `
-      query {
-        me {
-          id
-          email
-          name
-        }
+      const result = await response.json();
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
       }
-    `
-    client.request(query)
-      .then(data => {
-        state.user = data.me
-      })
-      .catch(() => {
-        logout()
-      })
-  }
 
-  return {
-    state,
-    login,
-    register,
-    logout,
-    fetchFeeds,
-    addFeed,
-    deleteFeed,
-    refreshAllFeeds,
-    fetchArticles,
-    fetchDigests,
-    generateDigest
-  }
-}
+      this.dossierConfigs = result.data.dossierConfigs || [];
+      return this.dossierConfigs;
+    } catch (error) {
+      console.error("Failed to fetch dossier configs:", error);
+      throw error;
+    }
+  },
+
+  async createDossierConfig(configData) {
+    try {
+      const response = await fetch("/graphql", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: `
+            mutation CreateDossierConfig($input: DossierConfigInput!) {
+              createDossierConfig(input: $input) {
+                id
+                title
+                email
+                feedUrls
+                articleCount
+                frequency
+                deliveryTime
+                timezone
+                tone
+                language
+                specialInstructions
+                active
+                createdAt
+              }
+            }
+          `,
+          variables: { input: configData },
+        }),
+      });
+
+      const result = await response.json();
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+
+      const newConfig = result.data.createDossierConfig;
+      this.dossierConfigs.push(newConfig);
+      return newConfig;
+    } catch (error) {
+      console.error("Failed to create dossier config:", error);
+      throw error;
+    }
+  },
+
+  async updateDossierConfig(id, configData) {
+    try {
+      const response = await fetch("/graphql", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: `
+            mutation UpdateDossierConfig($id: ID!, $input: DossierConfigInput!) {
+              updateDossierConfig(id: $id, input: $input) {
+                id
+                title
+                email
+                feedUrls
+                articleCount
+                frequency
+                deliveryTime
+                timezone
+                tone
+                language
+                specialInstructions
+                active
+                createdAt
+              }
+            }
+          `,
+          variables: { id, input: configData },
+        }),
+      });
+
+      const result = await response.json();
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+
+      const updatedConfig = result.data.updateDossierConfig;
+      const index = this.dossierConfigs.findIndex((config) => config.id === id);
+      if (index !== -1) {
+        this.dossierConfigs[index] = updatedConfig;
+      }
+      return updatedConfig;
+    } catch (error) {
+      console.error("Failed to update dossier config:", error);
+      throw error;
+    }
+  },
+
+  async deleteDossierConfig(id) {
+    try {
+      const response = await fetch("/graphql", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: `
+            mutation DeleteDossierConfig($id: ID!) {
+              deleteDossierConfig(id: $id)
+            }
+          `,
+          variables: { id },
+        }),
+      });
+
+      const result = await response.json();
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+
+      this.dossierConfigs = this.dossierConfigs.filter(
+        (config) => config.id !== id
+      );
+      return true;
+    } catch (error) {
+      console.error("Failed to delete dossier config:", error);
+      throw error;
+    }
+  },
+
+  async generateAndSendDossier(configId) {
+    try {
+      const response = await fetch("/graphql", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: `
+            mutation GenerateAndSendDossier($configId: ID!) {
+              generateAndSendDossier(configId: $configId)
+            }
+          `,
+          variables: { configId },
+        }),
+      });
+
+      const result = await response.json();
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+
+      return result.data.generateAndSendDossier;
+    } catch (error) {
+      console.error("Failed to generate and send dossier:", error);
+      throw error;
+    }
+  },
+
+  async testEmailConnection() {
+    try {
+      const response = await fetch("/graphql", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: `
+            mutation TestEmailConnection {
+              testEmailConnection
+            }
+          `,
+        }),
+      });
+
+      const result = await response.json();
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+
+      return result.data.testEmailConnection;
+    } catch (error) {
+      console.error("Failed to test email connection:", error);
+      throw error;
+    }
+  },
+
+  clearError() {
+    this.error = null;
+  },
+});
 
 export function useStore() {
-  const store = inject('store')
-  return store
+  return store;
 }
