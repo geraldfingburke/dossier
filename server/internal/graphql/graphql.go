@@ -1,9 +1,67 @@
+// Package graphql provides a GraphQL API for the Dossier application.
+//
+// This package implements a complete GraphQL schema for managing automated news digests,
+// including dossier configurations, RSS feed management, AI-powered summarization,
+// email delivery, and tone customization.
+//
+// # Architecture Overview
+//
+// The GraphQL API is structured into three main layers:
+//   1. Type Definitions: GraphQL types representing domain objects
+//   2. Query Operations: Read-only data retrieval
+//   3. Mutation Operations: State-changing operations (create, update, delete)
+//
+// # Key Features
+//
+//   - Dossier Configuration Management: Create, read, update, delete dossier configs
+//   - Delivery History: Query past dossier deliveries with filtering
+//   - Manual Triggering: Generate and send dossiers on-demand
+//   - Email Testing: Validate SMTP configuration and send test emails
+//   - Tone Customization: Manage AI tone presets for summary generation
+//   - Scheduler Monitoring: Check scheduler status and active configurations
+//
+// # Integration Points
+//
+// The GraphQL API orchestrates multiple services:
+//   - Database: PostgreSQL for persistent storage
+//   - RSS Service: Feed fetching and article aggregation
+//   - AI Service: Ollama-powered content summarization
+//   - Email Service: SMTP-based email delivery
+//   - Scheduler Service: Automated delivery scheduling
+//
+// # GraphQL Schema Structure
+//
+// Types:
+//   - DossierConfig: User configuration for automated digests
+//   - Dossier: Historical delivery record
+//   - Tone: AI tone preset with system/custom variants
+//   - SchedulerStatus: Real-time scheduler information
+//
+// Queries:
+//   - dossierConfigs: List all active configurations
+//   - dossierConfig(id): Get single configuration by ID
+//   - dossiers(configId, limit): Query delivery history
+//   - tones: List all available AI tones
+//   - tone(id): Get single tone by ID
+//   - schedulerStatus: Current scheduler state
+//
+// Mutations:
+//   - createDossierConfig: Create new configuration
+//   - updateDossierConfig: Update existing configuration
+//   - deleteDossierConfig: Delete configuration
+//   - generateAndSendDossier: Manually trigger delivery
+//   - sendTestEmail: Send test email with sample data
+//   - testEmailConnection: Validate SMTP settings
+//   - createTone: Create custom AI tone
+//   - updateTone: Update custom tone
+//   - deleteTone: Delete custom tone (system defaults protected)
 package graphql
 
 import (
 	"database/sql"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/geraldfingburke/dossier/server/internal/ai"
 	"github.com/geraldfingburke/dossier/server/internal/email"
@@ -15,9 +73,61 @@ import (
 	"github.com/lib/pq"
 )
 
-// Handler creates the GraphQL HTTP handler
+// ============================================================================
+// GRAPHQL HANDLER
+// ============================================================================
+
+// Handler creates the GraphQL HTTP handler for the Dossier API.
+//
+// This function constructs the complete GraphQL schema including all type definitions,
+// queries, and mutations. It integrates with multiple backend services to provide
+// a unified API for the frontend application.
+//
+// Service Dependencies:
+//   - db: PostgreSQL database connection for persistent storage
+//   - rssService: RSS feed fetching and article aggregation
+//   - aiService: AI-powered content summarization via Ollama
+//   - emailService: SMTP-based email delivery
+//   - schedulerService: Automated delivery scheduling and monitoring
+//
+// GraphQL Configuration:
+//   - Pretty: Formatted JSON responses for readability
+//   - GraphiQL: Interactive GraphQL IDE enabled for development
+//
+// Parameters:
+//   - db: Database connection
+//   - rssService: RSS feed service
+//   - aiService: AI summarization service
+//   - emailService: Email delivery service
+//   - schedulerService: Delivery scheduler service
+//
+// Returns:
+//   - *handler.Handler: Configured GraphQL HTTP handler
+//   - error: Schema creation or validation error
 func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailService *email.Service, schedulerService *scheduler.Service) (*handler.Handler, error) {
-	// DossierConfig GraphQL type
+	// ========================================================================
+	// TYPE DEFINITIONS
+	// ========================================================================
+	
+	// DossierConfig GraphQL type represents a user's automated digest configuration.
+	//
+	// This type maps to the dossier_configs database table and includes all settings
+	// needed to generate and deliver personalized news digests.
+	//
+	// Fields:
+	//   - id: Unique configuration identifier
+	//   - title: User-friendly name for the dossier
+	//   - email: Recipient email address
+	//   - feedUrls: Array of RSS feed URLs to aggregate
+	//   - articleCount: Number of articles to include per digest
+	//   - frequency: Delivery schedule (daily, weekly, etc.)
+	//   - deliveryTime: Time of day for scheduled delivery (HH:MM format)
+	//   - timezone: IANA timezone for delivery scheduling
+	//   - tone: AI tone preset for summary generation
+	//   - language: Target language for summaries
+	//   - specialInstructions: Custom AI instructions
+	//   - active: Whether automated delivery is enabled
+	//   - createdAt: Configuration creation timestamp
 	dossierConfigType := graphql.NewObject(graphql.ObjectConfig{
 		Name: "DossierConfig",
 		Fields: graphql.Fields{
@@ -41,10 +151,12 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 			},
 			"deliveryTime": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.String),
+				// Custom resolver to format delivery time as HH:MM for frontend.
+				// Database stores time as HH:MM:SS but UI only needs hour and minute.
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					var config *models.DossierConfig
 					
-					// Handle both pointer and value types
+					// Handle both pointer and value types for flexibility
 					switch v := p.Source.(type) {
 					case *models.DossierConfig:
 						config = v
@@ -82,7 +194,15 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 		},
 	})
 
-	// DossierConfigInput input type
+	// DossierConfigInput input type for create/update mutations.
+	//
+	// This input type defines the structure for creating and updating dossier configurations.
+	// All fields are required except tone, language, and specialInstructions which have defaults.
+	//
+	// Default Values:
+	//   - tone: "professional" (applied in resolver)
+	//   - language: "English" (applied in resolver)
+	//   - specialInstructions: "" (empty string)
 	dossierConfigInputType := graphql.NewInputObject(graphql.InputObjectConfig{
 		Name: "DossierConfigInput",
 		Fields: graphql.InputObjectConfigFieldMap{
@@ -119,7 +239,15 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 		},
 	})
 
-	// SchedulerStatus GraphQL type
+	// SchedulerStatus GraphQL type represents the current state of the delivery scheduler.
+	//
+	// This type provides real-time information about the automated delivery system,
+	// useful for admin dashboards and monitoring.
+	//
+	// Fields:
+	//   - running: Whether the scheduler is actively running
+	//   - nextCheck: Timestamp of next scheduled check (currently null, TODO)
+	//   - activeDossiers: Count of enabled dossier configurations
 	schedulerStatusType := graphql.NewObject(graphql.ObjectConfig{
 		Name: "SchedulerStatus",
 		Fields: graphql.Fields{
@@ -135,7 +263,17 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 		},
 	})
 
-	// Dossier (delivery) GraphQL type
+	// Dossier (delivery) GraphQL type represents a historical dossier delivery.
+	//
+	// This type maps to the dossier_deliveries table and provides access to
+	// past deliveries for viewing and auditing purposes.
+	//
+	// Fields:
+	//   - id: Unique delivery identifier
+	//   - configId: Reference to the dossier configuration
+	//   - subject: Email subject line (derived from config title)
+	//   - content: AI-generated summary content
+	//   - sentAt: Delivery timestamp
 	dossierType := graphql.NewObject(graphql.ObjectConfig{
 		Name: "Dossier",
 		Fields: graphql.Fields{
@@ -157,7 +295,24 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 		},
 	})
 
-	// Tone GraphQL type
+	// Tone GraphQL type represents an AI tone preset for summary generation.
+	//
+	// Tones control the style and voice of AI-generated summaries. The system
+	// includes default tones (protected from deletion) and supports custom tones.
+	//
+	// Fields:
+	//   - id: Unique tone identifier
+	//   - name: Display name (e.g., "Professional", "Casual", "Pirate")
+	//   - prompt: AI instruction text for tone application
+	//   - isSystemDefault: Whether this is a protected system tone
+	//   - createdAt: Tone creation timestamp
+	//   - updatedAt: Last modification timestamp
+	//
+	// System Default Tones:
+	//   - Professional, Casual, Academic, Creative, Technical
+	//   - Concise, Detailed, Humorous, Serious, Pirate
+	//
+	// Note: System default tones cannot be updated or deleted via GraphQL mutations.
 	toneType := graphql.NewObject(graphql.ObjectConfig{
 		Name: "Tone",
 		Fields: graphql.Fields{
@@ -182,7 +337,14 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 		},
 	})
 
-	// ToneInput GraphQL input type
+	// ToneInput GraphQL input type for tone create/update mutations.
+	//
+	// This simplified input type is used when creating or updating custom tones.
+	// System default tones are managed via database migrations.
+	//
+	// Fields:
+	//   - name: Display name for the tone
+	//   - prompt: AI instruction text (how to apply this tone)
 	toneInputType := graphql.NewInputObject(graphql.InputObjectConfig{
 		Name: "ToneInput",
 		Fields: graphql.InputObjectConfigFieldMap{
@@ -195,12 +357,30 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 		},
 	})
 
-	// Define the root query
+	// ========================================================================
+	// QUERY OPERATIONS
+	// ========================================================================
+	
+	// Define the root query with all read-only operations.
+	//
+	// Query operations provide data retrieval without side effects:
+	//   - dossierConfigs: List all active configurations
+	//   - dossierConfig: Get single configuration by ID
+	//   - schedulerStatus: Get scheduler state and active count
+	//   - dossiers: Query delivery history with optional filtering
+	//   - tones: List all available AI tones
+	//   - tone: Get single tone by ID
 	rootQuery := graphql.NewObject(graphql.ObjectConfig{
 		Name: "Query",
 		Fields: graphql.Fields{
 			"dossierConfigs": &graphql.Field{
 				Type: graphql.NewList(dossierConfigType),
+				// Retrieves all active dossier configurations ordered by creation date.
+				//
+				// Returns:
+				//   - List of DossierConfig objects
+				//   - Only includes active configurations (active = true)
+				//   - Sorted by created_at descending (newest first)
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					rows, err := db.QueryContext(p.Context, `
 						SELECT id, title, email, feed_urls, article_count, frequency, 
@@ -237,6 +417,15 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 						Type: graphql.NewNonNull(graphql.ID),
 					},
 				},
+				// Retrieves a single dossier configuration by ID.
+				//
+				// Arguments:
+				//   - id: Configuration ID (required)
+				//
+				// Returns:
+				//   - DossierConfig object if found
+				//   - null if ID doesn't exist
+				//   - error for database issues
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					id := p.Args["id"].(string)
 					
@@ -261,6 +450,17 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 			},
 			"schedulerStatus": &graphql.Field{
 				Type: schedulerStatusType,
+				// Retrieves current scheduler status and counts active dossiers.
+				//
+				// Returns:
+				//   - running: Boolean indicating if scheduler is active
+				//   - nextCheck: Next scheduled check time (currently null/TODO)
+				//   - activeDossiers: Count of enabled dossier configurations
+				//
+				// Use Cases:
+				//   - Admin dashboard monitoring
+				//   - System health checks
+				//   - User feedback on automation status
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					// Count active dossier configs
 					var activeCount int
@@ -288,6 +488,20 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 						Type: graphql.Int,
 					},
 				},
+				// Retrieves historical dossier deliveries with optional filtering.
+				//
+				// Arguments:
+				//   - configId: Filter by specific dossier configuration (optional)
+				//   - limit: Maximum number of results to return (optional)
+				//
+				// Returns:
+				//   - List of Dossier (delivery) objects
+				//   - Sorted by delivery_date descending (newest first)
+				//
+				// Use Cases:
+				//   - Viewing delivery archive for a specific dossier
+				//   - Displaying recent deliveries across all dossiers
+				//   - Audit trail for email delivery
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					configId, hasConfigId := p.Args["configId"]
 					limit, hasLimit := p.Args["limit"]
@@ -343,6 +557,17 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 			},
 			"tones": &graphql.Field{
 				Type: graphql.NewList(toneType),
+				// Retrieves all available AI tone presets.
+				//
+				// Returns:
+				//   - List of Tone objects
+				//   - Sorted by system default status (system tones first), then by name
+				//   - Includes both system defaults and custom user-created tones
+				//
+				// Sorting:
+				//   1. System default tones appear first
+				//   2. Custom tones appear after
+				//   3. Alphabetically sorted within each group
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					rows, err := db.QueryContext(p.Context, `
 						SELECT id, name, prompt, is_system_default, created_at, updated_at 
@@ -373,6 +598,14 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 						Type: graphql.NewNonNull(graphql.Int),
 					},
 				},
+				// Retrieves a single tone by ID.
+				//
+				// Arguments:
+				//   - id: Tone ID (required)
+				//
+				// Returns:
+				//   - Tone object if found
+				//   - error if ID doesn't exist or database issue
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					id := p.Args["id"].(int)
 					var tone models.Tone
@@ -389,7 +622,28 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 		},
 	})
 
-	// Define the root mutation
+	// ========================================================================
+	// MUTATION OPERATIONS
+	// ========================================================================
+	
+	// Define the root mutation with all state-changing operations.
+	//
+	// Mutation operations modify data and trigger side effects:
+	//
+	// Dossier Configuration:
+	//   - createDossierConfig: Create new configuration
+	//   - updateDossierConfig: Update existing configuration
+	//   - deleteDossierConfig: Delete configuration
+	//
+	// Dossier Generation & Delivery:
+	//   - generateAndSendDossier: Manually trigger delivery (fetch, summarize, send)
+	//   - sendTestEmail: Send test email with sample data
+	//   - testEmailConnection: Validate SMTP configuration
+	//
+	// Tone Management:
+	//   - createTone: Create custom tone
+	//   - updateTone: Update custom tone (system defaults protected)
+	//   - deleteTone: Delete custom tone (system defaults protected)
 	rootMutation := graphql.NewObject(graphql.ObjectConfig{
 		Name: "Mutation",
 		Fields: graphql.Fields{
@@ -400,6 +654,24 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 						Type: graphql.NewNonNull(dossierConfigInputType),
 					},
 				},
+				// Creates a new dossier configuration for automated delivery.
+				//
+				// Arguments:
+				//   - input: DossierConfigInput with all required fields
+				//
+				// Default Values Applied:
+				//   - tone: "professional" if not specified
+				//   - language: "English" if not specified
+				//   - specialInstructions: "" (empty) if not specified
+				//   - active: true (set by database default)
+				//
+				// Returns:
+				//   - Newly created DossierConfig object with generated ID
+				//   - error for validation failures or database issues
+				//
+				// Side Effects:
+				//   - Scheduler will begin monitoring this configuration
+				//   - Automated deliveries will start based on frequency and delivery_time
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					input := p.Args["input"].(map[string]interface{})
 					
@@ -465,6 +737,24 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 						Type: graphql.NewNonNull(dossierConfigInputType),
 					},
 				},
+				// Updates an existing dossier configuration.
+				//
+				// Arguments:
+				//   - id: Configuration ID to update (required)
+				//   - input: DossierConfigInput with updated values
+				//
+				// Behavior:
+				//   - Replaces all fields with new values
+				//   - Sets updated_at timestamp automatically
+				//   - Applies same default values as createDossierConfig
+				//
+				// Returns:
+				//   - Updated DossierConfig object
+				//   - error if ID doesn't exist or validation fails
+				//
+				// Side Effects:
+				//   - Scheduler will use updated settings for next delivery
+				//   - No impact on already-sent dossiers
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					id := p.Args["id"].(string)
 					input := p.Args["input"].(map[string]interface{})
@@ -531,6 +821,21 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 						Type: graphql.NewNonNull(graphql.ID),
 					},
 				},
+				// Permanently deletes a dossier configuration.
+				//
+				// Arguments:
+				//   - id: Configuration ID to delete (required)
+				//
+				// Returns:
+				//   - true if deletion successful
+				//   - false if deletion failed
+				//
+				// Side Effects:
+				//   - Configuration permanently removed from database
+				//   - Scheduler stops monitoring this configuration
+				//   - Historical deliveries remain in dossier_deliveries table
+				//
+				// Warning: This is a hard delete, not soft delete. Cannot be undone.
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					id := p.Args["id"].(string)
 					
@@ -550,6 +855,32 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 						Type: graphql.NewNonNull(graphql.ID),
 					},
 				},
+				// Manually generates and sends a dossier immediately.
+				//
+				// This mutation performs the complete dossier generation pipeline:
+				//   1. Fetch configuration from database
+				//   2. Fetch articles from configured RSS feeds
+				//   3. Generate AI summary using specified tone and language
+				//   4. Send email with summary and article links
+				//   5. Record delivery in dossier_deliveries table
+				//
+				// Arguments:
+				//   - configId: Configuration ID to process (required)
+				//
+				// Returns:
+				//   - true if entire pipeline succeeds
+				//   - false with error message if any step fails
+				//
+				// Error Conditions:
+				//   - Configuration not found or inactive
+				//   - No articles found from RSS feeds
+				//   - AI summary generation fails
+				//   - Email delivery fails
+				//
+				// Use Cases:
+				//   - Testing configuration before enabling automation
+				//   - Manual on-demand dossier generation
+				//   - Debugging delivery issues
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					configId := p.Args["configId"].(string)
 					
@@ -613,6 +944,32 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 						Type: graphql.NewNonNull(graphql.ID),
 					},
 				},
+				// Sends a test email with sample data to validate configuration.
+				//
+				// This mutation sends a test email using the configuration's settings
+				// but with hardcoded sample articles instead of real RSS content.
+				//
+				// Process:
+				//   1. Fetch configuration from database
+				//   2. Create sample articles with Lorem Ipsum content
+				//   3. Build test email with configuration details display
+				//   4. Send email using configured SMTP settings
+				//   5. Modifies subject line to include "- Test Email" suffix
+				//
+				// Arguments:
+				//   - configId: Configuration ID to test (required)
+				//
+				// Returns:
+				//   - true if test email sent successfully
+				//   - false with error message if sending fails
+				//
+				// Use Cases:
+				//   - Validating email address is correct
+				//   - Testing SMTP configuration
+				//   - Previewing email template formatting
+				//   - Verifying delivery settings before enabling automation
+				//
+				// Note: Does not record delivery in dossier_deliveries table.
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					configId := p.Args["configId"].(string)
 					
@@ -634,7 +991,6 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 						return false, err
 					}
 
-					// Create sample test content
 					testContent := `This is a test email from your Dossier system.
 
 **Configuration Details:**
@@ -662,11 +1018,11 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 *This was a test email sent at ` + time.Now().Format("2006-01-02 15:04:05 MST") + `*
 *Your actual dossiers will contain real articles from your configured RSS feeds.*`
 
-					// Send test email with modified subject
+					// Modify config title to indicate test email
 					testConfig := config
 					testConfig.Title = config.Title + " - Test Email"
 					
-					// Create sample articles for the email template
+					// Create sample articles for email template rendering
 					sampleArticles := []models.Article{
 						{
 							ID:          1,
@@ -705,6 +1061,24 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 			},
 			"testEmailConnection": &graphql.Field{
 				Type: graphql.Boolean,
+				// Tests SMTP connection without sending actual email.
+				//
+				// This mutation validates the email service configuration by:
+				//   1. Connecting to SMTP server
+				//   2. Performing TLS handshake
+				//   3. Authenticating with credentials
+				//   4. Disconnecting without sending message
+				//
+				// Returns:
+				//   - true if connection successful
+				//   - false with error message if connection fails
+				//
+				// Use Cases:
+				//   - Validating SMTP settings on initial setup
+				//   - Troubleshooting email delivery issues
+				//   - Verifying credentials after password change
+				//
+				// Note: Uses environment variables for SMTP configuration.
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					err := emailService.TestSMTPConnection()
 					if err != nil {
@@ -721,6 +1095,23 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 						Type: graphql.NewNonNull(toneInputType),
 					},
 				},
+				// Creates a new custom AI tone preset.
+				//
+				// Arguments:
+				//   - input: ToneInput with name and prompt
+				//
+				// Behavior:
+				//   - is_system_default automatically set to false
+				//   - created_at and updated_at timestamps auto-generated
+				//
+				// Returns:
+				//   - Newly created Tone object with generated ID
+				//   - error for validation failures or duplicate names
+				//
+				// Use Cases:
+				//   - Creating organization-specific tones
+				//   - Custom tone for specific audience
+				//   - Experimental tone variations
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					input := p.Args["input"].(map[string]interface{})
 					var tone models.Tone
@@ -747,6 +1138,22 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 						Type: graphql.NewNonNull(toneInputType),
 					},
 				},
+				// Updates an existing custom tone.
+				//
+				// Arguments:
+				//   - id: Tone ID to update (required)
+				//   - input: ToneInput with updated name and prompt
+				//
+				// Behavior:
+				//   - Only updates custom tones (is_system_default = false)
+				//   - Sets updated_at timestamp automatically
+				//   - Returns error if attempting to modify system default tone
+				//
+				// Returns:
+				//   - Updated Tone object
+				//   - error if ID doesn't exist or tone is system default
+				//
+				// Protection: System default tones cannot be modified.
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					id := p.Args["id"].(int)
 					input := p.Args["input"].(map[string]interface{})
@@ -772,6 +1179,24 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 						Type: graphql.NewNonNull(graphql.Int),
 					},
 				},
+				// Deletes a custom tone.
+				//
+				// Arguments:
+				//   - id: Tone ID to delete (required)
+				//
+				// Behavior:
+				//   - Only deletes custom tones (is_system_default = false)
+				//   - Returns false if tone is system default
+				//
+				// Returns:
+				//   - true if deletion successful
+				//   - false if tone is system default or doesn't exist
+				//   - error for database issues
+				//
+				// Protection: System default tones cannot be deleted.
+				//
+				// Note: Dossier configurations using this tone should be updated
+				// before deletion to avoid reference errors.
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					id := p.Args["id"].(int)
 					
@@ -793,7 +1218,19 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 		},
 	})
 
-	// Create GraphQL schema
+	// ========================================================================
+	// SCHEMA CREATION
+	// ========================================================================
+	
+	// Create GraphQL schema with query and mutation roots.
+	//
+	// The schema defines the complete GraphQL API contract including:
+	//   - All queryable types and their relationships
+	//   - Available query operations (read-only)
+	//   - Available mutation operations (state-changing)
+	//
+	// Schema validation occurs at creation time, catching type mismatches
+	// and invalid references before the API is exposed.
 	schema, err := graphql.NewSchema(graphql.SchemaConfig{
 		Query:    rootQuery,
 		Mutation: rootMutation,
@@ -802,7 +1239,24 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 		return nil, fmt.Errorf("failed to create GraphQL schema: %w", err)
 	}
 
-	// Create GraphQL handler
+	// ========================================================================
+	// HTTP HANDLER CONFIGURATION
+	// ========================================================================
+	
+	// Create GraphQL HTTP handler with development-friendly settings.
+	//
+	// Configuration:
+	//   - Pretty: Formats JSON responses for readability (should be false in production)
+	//   - GraphiQL: Enables interactive GraphQL IDE at same endpoint
+	//
+	// GraphiQL IDE:
+	//   - Access at http://localhost:8080/graphql in browser
+	//   - Provides documentation explorer, query builder, autocomplete
+	//   - Useful for development and API exploration
+	//
+	// Production Considerations:
+	//   - Set Pretty: false to reduce bandwidth
+	//   - Set GraphiQL: false to disable IDE in production
 	h := handler.New(&handler.Config{
 		Schema:   &schema,
 		Pretty:   true,
