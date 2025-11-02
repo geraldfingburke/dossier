@@ -1,98 +1,138 @@
-# Security Summary
+# Dossier Security Overview
 
-This document provides a security overview of the Dossier application.
+This document provides a comprehensive security overview of the Dossier system.
 
-## Security Measures Implemented
+## Security Architecture
 
-### Authentication & Authorization
+### Single-User Design Benefits
 
-✅ **JWT-based Authentication**
-- Tokens expire after 24 hours
-- HMAC-SHA256 signing algorithm
-- Configurable JWT secret via environment variable
-- Warning logged when using default development secret
+✅ **Simplified Attack Surface**
 
-✅ **Password Security**
-- Bcrypt hashing with automatic salt generation
-- Default cost factor of 10 (bcrypt.DefaultCost)
-- Passwords never stored in plain text
-- Passwords excluded from JSON serialization
+- No user authentication system to compromise
+- No session management vulnerabilities
+- No user enumeration attacks possible
+- Reduced complexity = fewer security bugs
 
-✅ **Authorization**
-- All protected endpoints require valid JWT token
-- User context extracted from validated tokens
-- User can only access their own data
-- Foreign key constraints enforce data isolation
+✅ **No User Data Isolation Concerns**
 
-### API Security
+- Direct dossier management without authorization layers
+- No multi-tenant security concerns
+- Simplified data access patterns
+- No user-specific credential management
 
-✅ **SQL Injection Prevention**
-- All queries use parameterized statements
+### Core Security Measures
+
+✅ **Local AI Processing**
+
+- All AI processing happens locally via Ollama
+- No external API calls that could leak data
+- Complete data sovereignty and privacy
+- No third-party AI service dependencies
+
+✅ **Database Security**
+
 - No string concatenation for SQL queries
 - Prepared statements via database/sql package
-
-✅ **CORS Configuration**
-- Restricted to specific origins (localhost for development)
-- Credentials allowed only from allowed origins
-- Configurable allowed methods and headers
+- SQL injection attack prevention
 
 ✅ **Input Validation**
-- Email format validation
-- URL validation for RSS feeds
-- Feed URL validation by actually fetching the feed
+
+- Email format validation for delivery addresses
+- RSS URL validation and accessibility testing
+- Time format validation for delivery schedules
+- Timezone validation against IANA database
+- Tone parameter validation against allowed values
 
 ✅ **Error Handling**
+
 - Sensitive information not exposed in error messages
-- Generic error messages for authentication failures
-- Detailed errors logged server-side only
+- Generic error messages for system failures
+- Detailed errors logged server-side for debugging
+- Graceful degradation when services unavailable
+
+### Email Security
+
+✅ **SMTP Security**
+
+- TLS encryption for all email transmission
+- Secure authentication with app-specific passwords
+- Environment variable storage for credentials
+- Connection timeout and retry logic
+
+✅ **Email Content Security**
+
+- HTML email template with safe rendering
+- URL validation for article links
+- Content sanitization from RSS feeds
+- No executable content in emails
 
 ### Database Security
 
 ✅ **Connection Security**
-- Connection string configurable via environment variable
-- Support for SSL/TLS connections (sslmode configurable)
-- Connection pooling via database/sql
+
+- Configurable connection string via environment variable
+- SSL/TLS support for database connections (sslmode configurable)
+- Connection pooling for efficient resource usage
+- Timeout configuration for database operations
 
 ✅ **Data Integrity**
-- Foreign key constraints
-- Unique constraints on critical fields
+
+- Foreign key constraints for relational integrity
+- Unique constraints on critical fields (feed URLs, article links)
 - NOT NULL constraints where appropriate
-- Cascade deletes for related data
+- Cascade deletes for related data cleanup
 
 ✅ **Schema Design**
-- Proper indexing for query performance
-- Timestamps for audit trails
-- Normalized schema design
 
-### External Services
+- Proper indexing for query performance and security
+- Timestamps for complete audit trails
+- Normalized schema preventing data duplication
+- Time-zone aware delivery tracking
 
-✅ **OpenAI API**
-- API key stored in environment variable
-- Never exposed in client-side code
-- Graceful fallback to mock summaries if key not configured
-- Request timeout configuration
+### AI Processing Security
+
+✅ **Ollama Local Processing**
+
+- All AI processing happens on local server
+- No external API calls during content generation
+- Model files stored locally, no network dependencies
+- Multiple model support without cloud services
+
+✅ **Content Processing**
+
+- 3-stage pipeline with validation at each step
+- Content sanitization from RSS feeds
+- Prompt injection prevention in custom instructions
+- Safe content extraction and fact checking
+
+### Network Security
 
 ✅ **RSS Feed Fetching**
-- URL validation before fetching
-- HTTP timeout configuration
-- Error handling for unreachable feeds
-- Parsing validation
+
+- URL validation and accessibility testing
+- HTTP timeout configuration prevents hanging requests
+- User-Agent headers for proper feed access
+- Error handling for unreachable or malformed feeds
+- Rate limiting to prevent feed server overload
 
 ### Application Security
 
 ✅ **Secrets Management**
+
 - All secrets in environment variables
 - .env.example template provided
 - .gitignore prevents committing secrets
 - Clear documentation about configuration
 
 ✅ **Request Handling**
+
 - Request ID middleware for tracing
 - Request logging for audit trails
 - Recovery middleware for panic handling
 - Timeout configuration for all operations
 
 ✅ **HTTPS Support**
+
 - Application ready for HTTPS deployment
 - Secure cookie attributes recommended for production
 - CORS configured for HTTPS origins
@@ -100,11 +140,13 @@ This document provides a security overview of the Dossier application.
 ## Security Audits
 
 ### Code Analysis
+
 - ✅ CodeQL scan: 0 alerts
 - ✅ Go build: No warnings
 - ✅ Dependency scan: No vulnerabilities
 
 ### Manual Review
+
 - ✅ Authentication flow verified
 - ✅ Authorization checks in place
 - ✅ SQL injection protection confirmed
@@ -116,6 +158,7 @@ This document provides a security overview of the Dossier application.
 While the current implementation follows security best practices, here are recommended enhancements for production:
 
 ### Authentication
+
 - [ ] Implement token refresh mechanism
 - [ ] Add rate limiting for authentication endpoints
 - [ ] Implement account lockout after failed attempts
@@ -124,6 +167,7 @@ While the current implementation follows security best practices, here are recom
 - [ ] Add multi-factor authentication (MFA)
 
 ### API Security
+
 - [ ] Implement request rate limiting
 - [ ] Add API key authentication for service-to-service calls
 - [ ] Implement request size limits
@@ -131,6 +175,7 @@ While the current implementation follows security best practices, here are recom
 - [ ] Implement query depth limiting
 
 ### Monitoring
+
 - [ ] Add security event logging
 - [ ] Implement intrusion detection
 - [ ] Add anomaly detection
@@ -138,6 +183,7 @@ While the current implementation follows security best practices, here are recom
 - [ ] Add alerting for security events
 
 ### Infrastructure
+
 - [ ] Implement Web Application Firewall (WAF)
 - [ ] Add DDoS protection
 - [ ] Implement TLS certificate pinning
@@ -147,6 +193,7 @@ While the current implementation follows security best practices, here are recom
 ## Security Best Practices for Deployment
 
 ### Environment Configuration
+
 ```bash
 # Use strong JWT secret in production
 export JWT_SECRET="$(openssl rand -base64 32)"
@@ -159,13 +206,17 @@ export OPENAI_API_KEY="sk-..."
 ```
 
 ### CORS Configuration
+
 Update the CORS middleware in production:
+
 ```go
 AllowedOrigins: []string{"https://yourdomain.com"},
 ```
 
 ### HTTPS
+
 Always use HTTPS in production:
+
 ```go
 srv := &http.Server{
     TLSConfig: &tls.Config{
@@ -176,7 +227,9 @@ srv.ListenAndServeTLS("cert.pem", "key.pem")
 ```
 
 ### Database
+
 Use SSL for database connections:
+
 ```
 DATABASE_URL=postgres://user:pass@host:5432/dossier?sslmode=require
 ```
@@ -186,17 +239,20 @@ DATABASE_URL=postgres://user:pass@host:5432/dossier?sslmode=require
 If a security issue is discovered:
 
 1. **Immediate Actions**
+
    - Document the issue
    - Assess the impact
    - Contain the issue if active
    - Notify affected users if data is compromised
 
 2. **Investigation**
+
    - Review logs for evidence
    - Identify root cause
    - Determine scope of compromise
 
 3. **Remediation**
+
    - Apply security fixes
    - Update dependencies
    - Review related code
@@ -211,6 +267,7 @@ If a security issue is discovered:
 ## Security Contacts
 
 For security issues:
+
 - Open a security advisory on GitHub
 - Do not disclose publicly until fixed
 - Provide detailed reproduction steps
@@ -224,46 +281,89 @@ This application is designed with the following compliance considerations:
 - **Data Encryption**: Support for TLS/SSL connections
 - **Audit Trails**: Timestamps on all records
 
-## Regular Security Tasks
-
-Recommended security maintenance schedule:
-
-### Weekly
-- [ ] Review application logs for anomalies
-- [ ] Check for failed authentication attempts
-
-### Monthly
-- [ ] Update dependencies
-- [ ] Review security advisories
-- [ ] Test backup restoration
-
-### Quarterly
-- [ ] Security code review
-- [ ] Penetration testing
-- [ ] Dependency audit
-- [ ] Access review
-
-### Annually
-- [ ] Full security audit
-- [ ] Update security policies
-- [ ] Review and update secrets
-- [ ] Disaster recovery test
-
-## Security Vulnerabilities Fixed
+## Security Vulnerability History
 
 ### During Development
-1. **PostgreSQL LastInsertId Issue**
-   - Issue: Incorrect use of LastInsertId() which PostgreSQL doesn't support
-   - Fix: Use RETURNING clause in INSERT statement
-   - Impact: Could cause digest creation to fail
 
-2. **JWT Secret Handling**
-   - Issue: Empty string passed to JWT service initialization
-   - Fix: Read from environment variable with warning for default
-   - Impact: Weak default secret in development
+1. **Exposed API Keys in Git History**
+
+   - Issue: OpenAI API keys accidentally committed to version control
+   - Fix: Git history rewritten using filter-branch, force-pushed clean history
+   - Impact: API keys rotated, repository cleaned of sensitive data
+
+2. **SMTP Credential Exposure Risk**
+   - Issue: Potential for SMTP credentials in environment files to be committed
+   - Fix: Enhanced .gitignore rules, .env.example template without real credentials
+   - Impact: Prevented credential exposure in version control
+
+## Regular Security Maintenance
+
+### Weekly Tasks
+
+- [ ] Review system logs for unusual AI processing patterns
+- [ ] Monitor email delivery success rates for potential issues
+- [ ] Check Ollama service health and model integrity
+- [ ] Review RSS feed access patterns for anomalies
+
+### Monthly Tasks
+
+- [ ] Update Docker base images and dependencies
+- [ ] Review and rotate SMTP app-specific passwords
+- [ ] Test backup and restoration procedures
+- [ ] Verify SSL/TLS certificate validity
+
+### Quarterly Tasks
+
+- [ ] Security code review focusing on new features
+- [ ] Penetration testing of API endpoints
+- [ ] Dependency vulnerability audit
+- [ ] Review and update security documentation
+
+### Annual Tasks
+
+- [ ] Full security architecture review
+- [ ] Disaster recovery testing
+- [ ] Update incident response procedures
+- [ ] Review compliance with data protection regulations
+
+## Incident Response
+
+1. **Detection**
+
+   - Monitor logs for unusual patterns
+   - Set up alerts for failed email deliveries
+   - Watch for AI processing errors or timeouts
+
+2. **Assessment**
+
+   - Determine scope and impact
+   - Identify affected dossiers or data
+   - Check for potential data exposure
+
+3. **Containment**
+
+   - Disable affected dossiers if necessary
+   - Update credentials if compromised
+   - Apply emergency patches
+
+4. **Recovery**
+   - Restore from backups if needed
+   - Verify system integrity
+   - Resume normal operations
+   - Document lessons learned
+
+## Security Contacts
+
+For security vulnerabilities:
+
+- Create private security advisory on GitHub
+- Include detailed reproduction steps
+- Allow time for fix before public disclosure
 
 ## Conclusion
 
-The Dossier application implements security best practices and has been reviewed for common vulnerabilities. While it is secure for deployment, implementing the recommended enhancements will further strengthen the security posture for production use.
+The Dossier system uses a security-first approach with local AI processing, encrypted communications, and minimal external dependencies. The single-user design eliminates many common attack vectors while maintaining functionality and ease of deployment.
 
-Last Updated: 2025-10-31
+**Security Level**: Suitable for personal and small business use with proper deployment practices.
+
+**Last Updated**: January 2025

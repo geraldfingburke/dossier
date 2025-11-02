@@ -1,51 +1,40 @@
-# Architecture Overview
+# Dossier System Architecture
 
-## System Architecture
+## High-Level System Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                         Client Layer                         │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │              Vue.js 3 Frontend                       │   │
-│  │  ┌───────────┐  ┌──────────┐  ┌──────────────┐    │   │
-│  │  │  Login    │  │  Feeds   │  │   Digests    │    │   │
-│  │  │  View     │  │  View    │  │   View       │    │   │
-│  │  └───────────┘  └──────────┘  └──────────────┘    │   │
-│  │                                                      │   │
-│  │  ┌──────────────────────────────────────────┐     │   │
-│  │  │         State Management (Store)         │     │   │
-│  │  │  - User state                            │     │   │
-│  │  │  - Feeds state                           │     │   │
-│  │  │  - Articles state                        │     │   │
-│  │  │  - Digests state                         │     │   │
-│  │  └──────────────────────────────────────────┘     │   │
-│  └─────────────────────────────────────────────────────┘   │
+│                    Vue.js 3 Frontend                         │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐    │
+│  │  Dossiers   │  │   Feeds     │  │    Articles     │    │
+│  │  Management │  │  Management │  │    Browser      │    │
+│  └─────────────┘  └─────────────┘  └─────────────────┘    │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │              Dossier Configuration UI                 │  │
+│  │  • Schedule Settings • AI Tone Selection             │  │
+│  │  • Email Configuration • RSS Feed Management        │  │
+│  └──────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
                             │
-                            │ GraphQL over HTTP
-                            │ (with JWT auth)
+                            │ GraphQL API
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                       API Layer (Go)                         │
+│                      Go Backend Server                       │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │           GraphQL Handler & Resolvers                │   │
-│  │  ┌────────────────┐  ┌──────────────────────┐     │   │
-│  │  │   Queries      │  │    Mutations         │     │   │
-│  │  │  - me          │  │  - register          │     │   │
-│  │  │  - feeds       │  │  - login             │     │   │
-│  │  │  - articles    │  │  - addFeed           │     │   │
-│  │  │  - digests     │  │  - deleteFeed        │     │   │
-│  │  └────────────────┘  │  - refreshAllFeeds   │     │   │
-│  │                      │  - generateDigest    │     │   │
-│  │                      └──────────────────────┘     │   │
+│  │                GraphQL API Layer                     │   │
+│  │  • Dossier CRUD Operations                          │   │
+│  │  • Feed Management                                   │   │
+│  │  • Article Fetching                                  │   │
+│  │  • Manual Test Email Triggers                       │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                                                              │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │              Middleware & Auth                       │   │
-│  │  - JWT validation                                    │   │
-│  │  - CORS handling                                     │   │
-│  │  - Request logging                                   │   │
-│  │  - Error recovery                                    │   │
+│  │              Automated Scheduler Service             │   │
+│  │  • Cron-like Scheduling Engine                      │   │
+│  │  • Timezone-aware Delivery                          │   │
+│  │  • Frequency Management (Daily/Weekly/Monthly)      │   │
+│  │  • Duplicate Prevention via Database Tracking       │   │
 │  └─────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
             │                    │                    │
@@ -58,309 +47,441 @@
 │    Atom          │  │  - OpenAI API    │  │  - JWT tokens   │
 │  - Save articles │  │    integration   │  │  - Password     │
 │  - Schedule      │  │  - Mock fallback │  │    hashing      │
-│    updates       │  │                  │  │                 │
-└──────────────────┘  └──────────────────┘  └─────────────────┘
-            │                    │                    │
-            └────────────────────┴────────────────────┘
-                              │
-                              ▼
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Processing Pipeline                         │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │              RSS Feed Processing                     │   │
+│  │  • Multi-feed Concurrent Fetching                   │   │
+│  │  • Content Parsing & Deduplication                  │   │
+│  │  • Article Storage & Metadata Extraction            │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                            │                                 │
+│                            ▼                                 │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │         3-Stage AI Processing Pipeline               │   │
+│  │  ┌───────────────┐ ┌────────────────┐ ┌──────────┐ │   │
+│  │  │  1. Article   │ │  2. Content    │ │ 3. Summary│ │   │
+│  │  │   Selection   │ │   Extraction   │ │Generation │ │   │
+│  │  │               │ │                │ │           │ │   │
+│  │  │ • Relevance   │ │ • Clean Text   │ │• Tone     │ │   │
+│  │  │ • Freshness   │ │ • Remove Fluff │ │• Language │ │   │
+│  │  │ • Quality     │ │ • Key Facts    │ │• Format   │ │   │
+│  │  └───────────────┘ └────────────────┘ └──────────┘ │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                            │                                 │
+│                            ▼                                 │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │              Email Generation & Delivery             │   │
+│  │  • HTML Template Rendering                          │   │
+│  │  • SMTP Secure Transmission                         │   │
+│  │  • Delivery Status Tracking                         │   │
+│  │  • Timezone-aware Scheduling                        │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
             ┌─────────────────────────────────────┐
-            │        Database Layer               │
+            │           Data Layer                │
             │         (PostgreSQL)                │
             │  ┌─────────────────────────────┐   │
-            │  │  Tables:                    │   │
-            │  │  - users                    │   │
+            │  │  Core Tables:               │   │
+            │  │  - dossiers                 │   │
+            │  │  - dossier_feeds            │   │
             │  │  - feeds                    │   │
             │  │  - articles                 │   │
-            │  │  - digests                  │   │
-            │  │  - digest_articles          │   │
+            │  │  - dossier_deliveries       │   │
             │  └─────────────────────────────┘   │
             └─────────────────────────────────────┘
 ```
 
+## Architectural Principles
+
+### Single-User Focus
+
+- No user authentication system (simplified deployment)
+- Direct dossier management without user isolation
+- Streamlined API surface without user context
+
+### Local-First AI Processing
+
+- **Ollama Integration**: Local LLM hosting for privacy
+- **Multi-Model Support**: Different models for different tones
+- **3-Stage Pipeline**: Structured content processing for quality
+
+### Automated Delivery System
+
+- **Scheduler Service**: Cron-like background processing
+- **Time-Aware**: Proper timezone handling for global users
+- **Frequency Support**: Daily, weekly, monthly delivery options
+- **Duplicate Prevention**: Database tracking prevents re-sending
+
 ## Component Details
 
-### Client Layer (Vue.js 3)
+### Frontend (Vue.js 3)
 
 **Technology Stack:**
+
 - Vue.js 3 with Composition API
-- Vite for build and development
-- GraphQL Request for API communication
+- Vite for fast development and building
+- VeeValidate for form validation
+- Responsive design with modern CSS
 
-**Key Components:**
-- `LoginView`: User authentication
-- `FeedsView`: RSS feed management
-- `ArticlesView`: Article listing
-- `DigestsView`: AI-generated digest viewing
+**Key Views:**
 
-**State Management:**
-- Reactive store using Vue 3 reactivity
-- JWT token persistence in localStorage
-- GraphQL client with automatic auth headers
+- `DossiersView`: Main dossier configuration interface
+- `FeedsView`: RSS feed management and testing
+- `ArticlesView`: Browse and search collected articles
 
-### API Layer (Go)
+**Features:**
+
+- Real-time form validation
+- Test email functionality
+- Tone selection with uncensored options
+- Multi-language dossier support
+
+### Backend (Go)
 
 **Technology Stack:**
-- Go 1.24
-- Chi router for HTTP handling
-- graphql-go for GraphQL implementation
-- Custom middleware for auth and CORS
 
-**Key Features:**
-- Type-safe GraphQL schema
-- JWT-based authentication
-- Graceful shutdown
-- Request logging
-- Error handling
+- Go 1.21+ with modern idioms
+- gqlgen for type-safe GraphQL
+- PostgreSQL with prepared statements
+- Structured logging with levels
 
-**GraphQL Schema:**
-```
-Types: User, Feed, Article, Digest, AuthPayload
-Queries: me, feeds, articles, digests, latestDigest
-Mutations: register, login, addFeed, deleteFeed, 
-           refreshAllFeeds, generateDigest
-```
+**Core Services:**
 
-### Service Layer
+#### GraphQL API Layer
 
-#### RSS Service
-- **Purpose**: Fetch and parse RSS feeds
-- **Library**: gofeed
-- **Functions**:
-  - Fetch feeds from URLs
-  - Parse RSS/Atom formats
-  - Save articles to database
-  - Schedule periodic updates
+- **Schema**: Type-safe dossier, feed, and article operations
+- **Resolvers**: CRUD operations for dossier management
+- **Mutations**: Create/update/delete dossiers and feeds
+- **Queries**: Fetch dossiers, articles, delivery history
 
-#### AI Service
-- **Purpose**: Generate article summaries
-- **Library**: go-openai
-- **Functions**:
-  - Summarize multiple articles into digest
-  - Summarize individual articles
-  - Mock summaries when API key not configured
-- **Model**: GPT-3.5-turbo (configurable)
+#### Scheduler Service
 
-#### Auth Service
-- **Purpose**: User authentication and authorization
-- **Libraries**: golang-jwt, bcrypt
-- **Functions**:
-  - User registration with password hashing
-  - User login with JWT generation
-  - Token validation and refresh
-  - Context-based user identification
+- **Cron Engine**: Background processing for scheduled deliveries
+- **Time Management**: Timezone-aware scheduling logic
+- **Frequency Logic**: Daily, weekly, monthly delivery patterns
+- **Lifecycle**: Integrated with server startup/shutdown
+
+#### RSS Processing Service
+
+- **Feed Fetching**: Concurrent RSS/Atom feed processing
+- **Parsing**: gofeed library for robust content extraction
+- **Deduplication**: Intelligent article duplicate detection
+- **Storage**: Efficient database operations for article management
+
+#### AI Processing Service
+
+- **Ollama Integration**: Local LLM server communication
+- **3-Stage Pipeline**:
+  1. **selectArticles()**: Intelligent relevance-based article selection
+  2. **extractFactualContent()**: Clean content extraction from articles
+  3. **generateSummaryFromCleanedArticles()**: Tone-aware summary generation
+- **Multi-Model Support**: Standard and uncensored model options
+- **Quality Assurance**: Structured prompts for consistent output
+
+#### Email Service
+
+- **SMTP Integration**: Secure email delivery via TLS
+- **HTML Templates**: Rich email formatting with Go templates
+- **Provider Support**: Gmail, Outlook, and standard SMTP servers
+- **Delivery Tracking**: Database logging of send status and timestamps
 
 ### Database Layer (PostgreSQL)
 
 **Schema Design:**
 
 ```sql
-users
+-- Core dossier configuration
+dossiers
 ├── id (serial, primary key)
-├── email (unique)
-├── password (hashed)
-├── name
+├── name (e.g., "Tech News", "Sports Updates")
+├── delivery_time (TIME, e.g., "08:00:00")
+├── frequency (daily/weekly/monthly)
+├── timezone (e.g., "America/New_York")
+├── tone (professional/humorous/analytical/etc.)
+├── language (default: "english")
+├── special_instructions (optional custom prompts)
+├── email_to (delivery email address)
+├── is_active (boolean)
+└── timestamps (created_at, updated_at)
+
+-- RSS feeds associated with dossiers
+dossier_feeds
+├── id (serial, primary key)
+├── dossier_id (foreign key → dossiers)
+├── feed_id (foreign key → feeds)
 └── timestamps
 
+-- RSS feed metadata
 feeds
 ├── id (serial, primary key)
-├── user_id (foreign key → users)
-├── url
-├── title
+├── url (unique RSS feed URL)
+├── title (extracted from feed)
 ├── description
-├── active
+├── last_fetched_at
 └── timestamps
 
+-- Collected articles from all feeds
 articles
 ├── id (serial, primary key)
 ├── feed_id (foreign key → feeds)
 ├── title
-├── link (unique)
+├── link (unique URL)
 ├── description
-├── content
+├── content (full article text)
 ├── author
 ├── published_at
 └── created_at
 
-digests
+-- Delivery tracking to prevent duplicates
+dossier_deliveries
 ├── id (serial, primary key)
-├── user_id (foreign key → users)
-├── date (unique per user)
-├── summary
-└── created_at
-
-digest_articles (junction table)
-├── digest_id (foreign key → digests)
-└── article_id (foreign key → articles)
+├── dossier_id (foreign key → dossiers)
+├── delivered_at (timestamp with timezone)
+├── status (sent/failed)
+├── email_content (generated HTML)
+└── article_count
 ```
 
-**Indexes:**
-- `idx_feeds_user_id`: Fast feed lookup by user
-- `idx_articles_feed_id`: Fast article lookup by feed
-- `idx_articles_published_at`: Chronological article queries
-- `idx_digests_user_id`: Fast digest lookup by user
-- `idx_digests_date`: Chronological digest queries
+**Key Indexes:**
 
-## Data Flow
+- `idx_dossiers_active`: Fast lookup of active dossiers
+- `idx_dossier_feeds_dossier`: Feed associations per dossier
+- `idx_articles_feed_published`: Recent articles by feed
+- `idx_deliveries_dossier_time`: Delivery history tracking
+- `idx_feeds_url`: Unique feed URL constraints
 
-### Feed Addition Flow
-```
-1. User enters RSS URL in UI
-2. Frontend sends addFeed mutation
-3. GraphQL resolver validates auth
-4. RSS service fetches and validates feed
-5. Feed metadata saved to database
-6. Background job fetches initial articles
-7. Success response sent to client
-8. UI updates feed list
-```
+## System Flows
 
-### Digest Generation Flow
+### Dossier Creation Flow
+
 ```
-1. User clicks "Generate Digest" or scheduled job runs
-2. System fetches all active feeds for user
-3. RSS service fetches latest articles (last 24h)
-4. Articles saved to database
-5. AI service groups and summarizes articles
-6. Digest created and linked to articles
-7. Summary displayed to user
+1. User configures dossier in UI (name, schedule, tone, email)
+2. User adds RSS feeds to dossier
+3. Frontend sends createDossier mutation with feed URLs
+4. Backend validates feeds and fetches initial metadata
+5. Dossier and feed associations stored in database
+6. Scheduler automatically picks up new dossier for delivery
+7. UI confirms successful creation
 ```
 
-### Authentication Flow
+### Automated Delivery Flow
+
 ```
-1. User submits login credentials
-2. Auth service validates email/password
-3. JWT token generated (24h expiry)
-4. Token sent to client and stored
-5. Subsequent requests include token in header
-6. Middleware validates token and extracts user ID
-7. User ID added to request context
-8. Resolvers access user ID from context
+1. Scheduler runs every minute checking for due dossiers
+2. For each due dossier:
+   a. Check delivery history to prevent duplicates
+   b. Fetch recent articles from associated RSS feeds
+   c. Run 3-stage AI processing pipeline:
+      - selectArticles(): Choose most relevant articles
+      - extractFactualContent(): Clean and extract key information
+      - generateSummaryFromCleanedArticles(): Create formatted summary
+   d. Generate HTML email using template
+   e. Send via SMTP with delivery tracking
+   f. Record successful delivery in database
+3. Log all operations with structured logging
 ```
 
-## Security Considerations
+### Manual Test Flow
 
-1. **Password Security**: Bcrypt hashing with salt
-2. **JWT Tokens**: 24-hour expiration, HMAC-SHA256 signing
-3. **SQL Injection**: Prepared statements with parameterized queries
-4. **CORS**: Configured for specific origins
-5. **API Keys**: Stored in environment variables
-6. **Input Validation**: Feed URL validation, email format checks
+```
+1. User clicks "Test Email" button in UI
+2. Frontend sends testDossier mutation
+3. Backend immediately processes dossier (bypassing scheduler)
+4. Uses same AI pipeline as automated delivery
+5. Sends test email with "TEST" subject prefix
+6. Returns success/failure status to UI
+7. Does not record in delivery history
+```
 
-## Scalability Considerations
+## AI Processing Pipeline
 
-### Current Design
-- Single server instance
-- Direct database connections
-- Synchronous article fetching
-- In-memory rate limiting
+### Stage 1: Article Selection (`selectArticles()`)
 
-### Future Enhancements
-- **Horizontal Scaling**: Load balancer + multiple server instances
-- **Caching**: Redis for feed/article caching
-- **Queue System**: Background job processing for feed updates
-- **CDN**: Static asset delivery
-- **Database**: Read replicas for query scaling
-- **Rate Limiting**: Redis-based distributed rate limiting
+- **Input**: All articles from dossier's RSS feeds (last 24-48 hours)
+- **Process**: AI evaluates articles for relevance, freshness, and quality
+- **Output**: Filtered list of 10-20 most important articles
+- **Criteria**: Topic relevance, source credibility, recency, uniqueness
 
-## Monitoring and Observability
+### Stage 2: Content Extraction (`extractFactualContent()`)
 
-### Current Features
-- Request logging via Chi middleware
-- Error logging to stdout
-- Health check endpoint
+- **Input**: Selected articles with full content
+- **Process**: AI extracts key facts, removes promotional content and fluff
+- **Output**: Clean, factual summaries of each article
+- **Focus**: Core information, key statistics, important quotes, actionable insights
 
-### Recommended Additions
-- Structured logging (JSON format)
-- Metrics collection (Prometheus)
-- Distributed tracing (OpenTelemetry)
-- Error tracking (Sentry)
-- Performance monitoring
-- Database query analytics
+### Stage 3: Summary Generation (`generateSummaryFromCleanedArticles()`)
+
+- **Input**: Clean factual content from stage 2
+- **Process**: AI synthesizes information into cohesive summary with chosen tone
+- **Output**: Final formatted summary ready for email delivery
+- **Features**: Tone adaptation, language selection, custom instructions
+
+## Security Architecture
+
+### Single-User Design Benefits
+
+- **No Authentication Attack Surface**: No user accounts, passwords, or session management
+- **Simplified Deployment**: Direct configuration without user isolation concerns
+- **Reduced Complexity**: No authorization logic or user-specific data access controls
+
+### Core Security Measures
+
+1. **Local AI Processing**: No external API calls, all data stays on premises
+2. **Environment Variables**: All sensitive data (SMTP credentials, secrets) in env files
+3. **SQL Injection Prevention**: Prepared statements with parameterized queries
+4. **SMTP Security**: TLS encryption for email transmission
+5. **Input Validation**: URL validation for RSS feeds, email format verification
+6. **Secret Management**: Git history cleaned of exposed credentials
+
+### Infrastructure Security
+
+- **Container Isolation**: Each service runs in isolated Docker containers
+- **Network Security**: Services communicate over Docker internal networks
+- **Credential Rotation**: Easy SMTP password updates via environment variables
+- **Access Control**: File system permissions for database and configuration files
 
 ## Deployment Architecture
 
-### Docker Compose (Development)
+### Development Environment (Docker Compose)
+
 ```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  PostgreSQL  │────▶│  Backend Go  │────▶│  Frontend    │
-│  Container   │     │  Container   │     │  Dev Server  │
-└──────────────┘     └──────────────┘     └──────────────┘
-    Port 5432            Port 8080            Port 5173
+┌──────────────┐   ┌─────────────┐   ┌──────────────┐   ┌─────────────┐
+│ PostgreSQL   │   │ Ollama      │   │ Go Backend   │   │ Vue.js      │
+│ Database     │───│ AI Server   │───│ API Server   │───│ Frontend    │
+│ Port: 5432   │   │ Port: 11434 │   │ Port: 8080   │   │ Port: 5173  │
+└──────────────┘   └─────────────┘   └──────────────┘   └─────────────┘
 ```
 
-### Production (Recommended)
+### Single-Server Production Deployment
+
 ```
+                    ┌──────────────────────────────────────┐
+                    │          Production Server           │
+                    │                                      │
+                    │  ┌─────────────┐  ┌─────────────┐   │
+                    │  │ Nginx Proxy │  │ Go Backend  │   │
+                    │  │ (Port 80/   │──│ (Port 8080) │   │
+                    │  │  443)       │  │ + Scheduler │   │
+                    │  └─────────────┘  └─────────────┘   │
+                    │         │                           │
+                    │  ┌──────▼──────┐  ┌─────────────┐   │
+                    │  │ PostgreSQL  │  │ Ollama AI   │   │
+                    │  │ (Port 5432) │  │ (Port 11434)│   │
+                    │  └─────────────┘  └─────────────┘   │
+                    └──────────────────────────────────────┘
+                              │
+                              ▼
                     ┌──────────────────┐
-                    │   Load Balancer  │
-                    │     (Nginx)      │
-                    └────────┬─────────┘
-                             │
-              ┌──────────────┴──────────────┐
-              │                             │
-    ┌─────────▼────────┐         ┌─────────▼────────┐
-    │  Backend Server  │         │  Backend Server  │
-    │    Instance 1    │         │    Instance 2    │
-    └─────────┬────────┘         └─────────┬────────┘
-              │                             │
-              └──────────────┬──────────────┘
-                             │
-                    ┌────────▼─────────┐
-                    │   PostgreSQL     │
-                    │  (Managed DB)    │
+                    │   SMTP Provider   │
+                    │ (Gmail/Outlook)   │
                     └──────────────────┘
-
-    ┌──────────────────────────────────────┐
-    │  Frontend (Static Files on CDN)      │
-    └──────────────────────────────────────┘
 ```
 
-## Technology Choices
+### Cloud Deployment Options
+
+**Option 1: VPS Deployment**
+
+- Single virtual server (4GB RAM minimum for Ollama)
+- Docker Compose for all services
+- Automated backups for PostgreSQL
+- SSL certificate via Let's Encrypt
+
+**Option 2: Container Platform**
+
+- Deploy to platforms like Railway, Render, or DigitalOcean App Platform
+- External PostgreSQL service
+- Ollama on dedicated AI server or cloud AI service
+- Static frontend deployment
+
+## Performance & Scaling
+
+### Current Optimizations
+
+- **Concurrent RSS Fetching**: Goroutines for parallel feed processing
+- **Database Connection Pooling**: Efficient PostgreSQL connections
+- **Local AI Processing**: No external API latency
+- **Smart Scheduling**: Prevents duplicate deliveries
+- **Efficient Queries**: Proper database indexing
+
+### Scaling Strategies
+
+- **Vertical Scaling**: More CPU/RAM for better Ollama performance
+- **AI Model Optimization**: Smaller models for faster processing
+- **Database Optimization**: Query optimization and proper indexing
+- **Caching Layer**: Redis for feed caching (future enhancement)
+- **Content Delivery**: Static asset CDN for frontend
+
+## Technology Decisions
 
 ### Why Go for Backend?
-- Fast compilation and execution
-- Excellent concurrency support (goroutines)
-- Strong standard library
-- Easy deployment (single binary)
-- Good GraphQL libraries
+
+- **Concurrency**: Goroutines perfect for RSS fetching and scheduling
+- **Performance**: Fast execution for real-time email generation
+- **Deployment**: Single binary deployment for easy server management
+- **Libraries**: Excellent GraphQL, HTTP, and database libraries
+- **Memory**: Efficient memory usage for always-running scheduler
+
+### Why Local AI (Ollama)?
+
+- **Privacy**: No external API calls, complete data sovereignty
+- **Cost**: No per-request charges, unlimited processing
+- **Reliability**: No network dependencies for AI processing
+- **Customization**: Multiple models, uncensored options
+- **Speed**: Local processing after initial model download
 
 ### Why GraphQL?
-- Flexible data fetching
-- Strong typing
-- Single endpoint
-- Efficient data loading
-- Self-documenting API
 
-### Why Vue.js?
-- Gentle learning curve
-- Reactive and performant
-- Composition API for better code organization
-- Excellent developer experience with Vite
-- Small bundle size
+- **Type Safety**: Compile-time schema validation
+- **Flexibility**: Frontend can request exactly needed data
+- **Single Endpoint**: Simplified API surface
+- **Development**: Excellent tooling and introspection
+- **Evolution**: Easy schema changes without versioning
+
+### Why Vue.js 3?
+
+- **Reactivity**: Perfect for real-time dossier configuration
+- **Composition API**: Clean component logic organization
+- **Performance**: Efficient rendering with proxy-based reactivity
+- **Developer Experience**: Excellent Vite integration and DevTools
+- **Ecosystem**: Rich component libraries and tooling
 
 ### Why PostgreSQL?
-- Robust and reliable
-- ACID compliance
-- Excellent JSON support
-- Rich indexing capabilities
-- Great ecosystem and tools
 
-## Performance Considerations
+- **Reliability**: ACID compliance for delivery tracking
+- **Time Support**: Native TIME/TIMESTAMP handling for scheduling
+- **JSON**: Flexible configuration storage capabilities
+- **Performance**: Excellent indexing for article queries
+- **Ecosystem**: Mature tooling and backup solutions
 
-### Backend
-- Connection pooling for database
-- Goroutines for concurrent feed fetching
-- HTTP timeout configuration
-- Efficient SQL queries with indexes
+### Why Docker?
 
-### Frontend
-- Code splitting with Vite
-- Lazy loading of routes
-- Efficient state management
-- Debounced API calls
+- **Consistency**: Identical development and production environments
+- **Isolation**: Each service in dedicated container
+- **Dependencies**: AI models and database bundled cleanly
+- **Deployment**: Simple docker-compose deployment
+- **Scaling**: Easy horizontal scaling when needed
 
-### Database
-- Proper indexing strategy
-- Foreign key constraints
-- Efficient JOIN queries
-- Regular VACUUM and ANALYZE
+## Monitoring Strategy
+
+### Current Implementation
+
+- **Structured Logging**: JSON logs with levels (debug/info/warn/error)
+- **Scheduler Logging**: Detailed logs for delivery processing
+- **AI Pipeline Logging**: Debug information for content processing
+- **Email Tracking**: Database records of all delivery attempts
+- **Error Handling**: Graceful degradation with detailed error messages
+
+### Production Monitoring (Recommended)
+
+- **Health Checks**: `/health` endpoint for uptime monitoring
+- **Metrics Collection**: Prometheus for system metrics
+- **Log Aggregation**: ELK stack or similar for log analysis
+- **Email Delivery Monitoring**: Track bounce rates and delivery success
+- **AI Model Performance**: Response times and quality metrics
+- **Database Performance**: Query times and connection pool usage

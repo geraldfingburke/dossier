@@ -15,20 +15,51 @@ Thank you for your interest in contributing to Dossier! This document provides g
 
 ## Development Setup
 
-### Backend Development
+### Quick Start (Recommended)
+
+```bash
+# Clone the repository
+git clone https://github.com/YOUR_USERNAME/dossier.git
+cd dossier
+
+# Start all services with Docker Compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+```
+
+This starts:
+
+- PostgreSQL on port 5432
+- Ollama AI service on port 11434
+- Go backend on port 8080
+- Vue.js frontend on port 5173
+
+### Manual Development Setup
+
+#### Prerequisites
+
+- Go 1.21+
+- Node.js 18+
+- PostgreSQL 14+
+- Docker (for Ollama)
+
+#### Backend Development
 
 ```bash
 # Install Go dependencies
 go mod download
 
-# Run the server with hot reload
-go run server/cmd/main.go
+# Set environment variables
+cp .env.example .env
+# Edit .env with your configuration
 
-# Or use the Makefile
-make run-server
+# Run the server with scheduler
+go run server/cmd/main.go
 ```
 
-### Frontend Development
+#### Frontend Development
 
 ```bash
 cd client
@@ -36,37 +67,42 @@ npm install
 npm run dev
 ```
 
-### Database
-
-You can use Docker for PostgreSQL:
+#### AI Service Setup
 
 ```bash
-docker run -d \
-  --name dossier-postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=dossier \
-  -p 5432:5432 \
-  postgres:15-alpine
+# Start Ollama in Docker
+docker run -d -v ollama:/root/.ollama -p 11434:11434 --name ollama ollama/ollama
+
+# Pull required models
+docker exec -it ollama ollama pull llama3.2:3b
+docker exec -it ollama ollama pull dolphin-mistral
 ```
 
 ## Project Structure
 
 ```
 dossier/
-├── server/           # Go backend
+├── server/           # Go backend with scheduler
 │   ├── cmd/          # Application entry points
+│   │   └── main.go   # Server with integrated scheduler
 │   └── internal/     # Internal packages
-│       ├── ai/       # AI service
-│       ├── auth/     # Authentication
-│       ├── database/ # Database layer
-│       ├── graphql/  # GraphQL API
-│       ├── models/   # Data models
-│       └── rss/      # RSS service
-└── client/           # Vue.js frontend
-    └── src/
-        ├── components/ # Reusable components
-        ├── views/      # Page views
-        └── store/      # State management
+│       ├── ai/       # Local AI service (Ollama integration)
+│       ├── database/ # Database layer and migrations
+│       ├── graphql/  # GraphQL API and resolvers
+│       ├── models/   # Data models (dossiers, feeds, articles)
+│       └── rss/      # RSS feed processing service
+├── client/           # Vue.js 3 frontend
+│   └── src/
+│       ├── views/    # Main application pages
+│       │   ├── DossiersView.vue  # Dossier management
+│       │   ├── FeedsView.vue     # Feed management
+│       │   └── ArticlesView.vue  # Article browsing
+│       ├── store/    # Vuex state management
+│       └── App.vue   # Root component
+├── docker-compose.yml    # Complete development environment
+├── Dockerfile           # Production container build
+├── QUICKSTART.md        # Quick setup guide
+└── SMTP_SETUP.md        # Email configuration guide
 ```
 
 ## Code Style

@@ -1,105 +1,201 @@
-# API Documentation
+# Dossier GraphQL API Documentation
 
-This document provides detailed information about the Dossier GraphQL API.
+This document provides comprehensive information about the Dossier system's GraphQL API.
 
-## Base URL
+## Base URLs
 
-- Development: `http://localhost:8080/graphql`
-- GraphQL Playground: `http://localhost:8080/graphql/playground`
+- **Development**: `http://localhost:8080/graphql`
+- **GraphQL Playground**: `http://localhost:8080/graphql/playground`
 
 ## Authentication
 
-All authenticated requests must include a JWT token in the Authorization header:
+The Dossier system uses a **single-user design** with no authentication required. All API operations are available directly without tokens or login.
 
-```
-Authorization: Bearer YOUR_JWT_TOKEN
-```
+## Core Concepts
 
-You receive a token after successful login or registration.
+- **Dossier**: A configuration for automated email delivery with RSS feeds, schedule, and AI settings
+- **Feed**: RSS/Atom feed sources that provide articles
+- **Article**: Individual news items collected from feeds
+- **Delivery**: Historical record of sent dossier emails
 
 ## GraphQL Schema
 
-### Types
+### Core Types
 
-#### User
+#### Dossier
+
 ```graphql
-type User {
+type Dossier {
   id: ID!
-  email: String!
-  name: String!
-  feeds: [Feed!]!
-  digests: [Digest!]!
+  name: String! # e.g., "Tech News", "Sports Updates"
+  deliveryTime: String! # e.g., "08:00" (24-hour format)
+  frequency: Frequency! # DAILY, WEEKLY, MONTHLY
+  timezone: String # e.g., "America/New_York"
+  tone: String! # AI summary tone
+  language: String # Summary language (default: "english")
+  specialInstructions: String # Custom AI prompts
+  emailTo: String! # Delivery email address
+  isActive: Boolean!
+  feeds: [Feed!]! # Associated RSS feeds
+  deliveries: [DossierDelivery!]! # Delivery history
   createdAt: String!
+  updatedAt: String!
 }
 ```
 
 #### Feed
+
 ```graphql
 type Feed {
   id: ID!
-  url: String!
-  title: String
-  description: String
-  active: Boolean!
-  articles: [Article!]!
+  url: String! # RSS/Atom feed URL
+  title: String # Feed title from metadata
+  description: String # Feed description
+  lastFetchedAt: String # Last successful fetch time
+  articles: [Article!]! # Articles from this feed
+  dossiers: [Dossier!]! # Dossiers using this feed
   createdAt: String!
   updatedAt: String!
 }
 ```
 
 #### Article
+
 ```graphql
 type Article {
   id: ID!
-  feedId: ID!
-  title: String!
-  link: String!
-  description: String
-  content: String
-  author: String
-  publishedAt: String!
+  feedId: ID! # Reference to source feed
+  title: String! # Article headline
+  link: String! # Original article URL (unique)
+  description: String # Article summary/excerpt
+  content: String # Full article content
+  author: String # Article author
+  publishedAt: String! # Original publication date
+  feed: Feed! # Source feed relationship
   createdAt: String!
 }
 ```
 
-#### Digest
+#### DossierDelivery
+
 ```graphql
-type Digest {
+type DossierDelivery {
   id: ID!
-  userId: ID!
-  date: String!
-  summary: String!
-  articles: [Article!]!
-  createdAt: String!
+  dossierId: ID! # Reference to dossier
+  deliveredAt: String! # Delivery timestamp with timezone
+  status: DeliveryStatus! # SENT, FAILED
+  emailContent: String # Generated HTML email content
+  articleCount: Int! # Number of articles in delivery
+  dossier: Dossier! # Dossier relationship
 }
 ```
 
-#### AuthPayload
+#### Enums
+
 ```graphql
-type AuthPayload {
-  token: String!
-  user: User!
+enum Frequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum DeliveryStatus {
+  SENT
+  FAILED
+}
+```
+
+### Input Types
+
+#### DossierInput
+
+```graphql
+input DossierInput {
+  name: String!
+  deliveryTime: String! # Format: "HH:MM" (24-hour)
+  frequency: Frequency!
+  timezone: String # IANA timezone (optional)
+  tone: String! # AI tone selection
+  language: String # Summary language (optional)
+  specialInstructions: String # Custom AI instructions (optional)
+  emailTo: String! # Delivery email address
+  feedUrls: [String!]! # Initial RSS feed URLs
 }
 ```
 
 ## Queries
 
-### Get Current User
+### Get All Dossiers
 
 ```graphql
 query {
-  me {
+  dossiers {
     id
-    email
     name
+    deliveryTime
+    frequency
+    timezone
+    tone
+    language
+    emailTo
+    isActive
+    feeds {
+      id
+      url
+      title
+    }
+    deliveries(limit: 5) {
+      deliveredAt
+      status
+      articleCount
+    }
     createdAt
   }
 }
 ```
 
-**Authentication:** Required
+**Returns:** All configured dossiers with their associated feeds and recent deliveries
 
-**Returns:** The currently authenticated user
+### Get Specific Dossier
+
+```graphql
+query GetDossier($id: ID!) {
+  dossier(id: $id) {
+    id
+    name
+    deliveryTime
+    frequency
+    timezone
+    tone
+    language
+    specialInstructions
+    emailTo
+    isActive
+    feeds {
+      id
+      url
+      title
+      description
+      lastFetchedAt
+    }
+    deliveries {
+      id
+      deliveredAt
+      status
+      articleCount
+      emailContent
+    }
+    createdAt
+    updatedAt
+  }
+}
+```
+
+**Parameters:**
+
+- `id`: Dossier ID
+
+**Returns:** Detailed dossier information including full delivery history
 
 ### Get All Feeds
 
@@ -110,53 +206,73 @@ query {
     url
     title
     description
-    active
+    lastFetchedAt
+    dossiers {
+      id
+      name
+    }
     createdAt
     updatedAt
   }
 }
 ```
 
-**Authentication:** Required
-
-**Returns:** List of all feeds for the current user
-
-### Get Single Feed
-
-```graphql
-query {
-  feed(id: "1") {
-    id
-    url
-    title
-    description
-    active
-  }
-}
-```
-
-**Authentication:** Required
-
-**Parameters:**
-- `id` (ID!): Feed ID
+**Returns:** All RSS feeds in the system with associated dossier information
 
 ### Get Articles
 
 ```graphql
-query {
-  articles(limit: 20, offset: 0) {
+query GetArticles($limit: Int, $offset: Int, $feedId: ID) {
+  articles(limit: $limit, offset: $offset, feedId: $feedId) {
     id
-    feedId
     title
     link
     description
-    content
     author
     publishedAt
+    feed {
+      title
+      url
+    }
     createdAt
   }
 }
 ```
+
+**Parameters:**
+
+- `limit`: Number of articles to return (optional, default: 50)
+- `offset`: Pagination offset (optional, default: 0)
+- `feedId`: Filter by specific feed (optional)
+
+**Returns:** Paginated list of articles, optionally filtered by feed
+
+### Search Articles
+
+```graphql
+query SearchArticles($query: String!, $limit: Int) {
+  searchArticles(query: $query, limit: $limit) {
+    id
+    title
+    link
+    description
+    publishedAt
+    feed {
+      title
+    }
+  }
+}
+```
+
+**Parameters:**
+
+- `query`: Search term for article titles and descriptions
+- `limit`: Maximum results (optional, default: 20)
+
+**Returns:** Articles matching the search query
+}
+
+````
 
 **Authentication:** Required
 
@@ -178,11 +294,12 @@ query {
     publishedAt
   }
 }
-```
+````
 
 **Authentication:** Required
 
 **Parameters:**
+
 - `id` (ID!): Article ID
 
 ### Get Digests
@@ -207,6 +324,7 @@ query {
 **Authentication:** Required
 
 **Parameters:**
+
 - `limit` (Int): Maximum number of digests to return (default: 10)
 
 ### Get Single Digest
@@ -228,6 +346,7 @@ query {
 **Authentication:** Required
 
 **Parameters:**
+
 - `id` (ID!): Digest ID
 
 ### Get Latest Digest
@@ -252,19 +371,71 @@ query {
 
 ## Mutations
 
-### Register
+### Create Dossier
 
 ```graphql
-mutation {
-  register(
-    email: "user@example.com"
-    password: "securepassword"
-    name: "John Doe"
-  ) {
-    token
-    user {
+mutation CreateDossier($input: DossierInput!) {
+  createDossier(input: $input) {
+    id
+    name
+    deliveryTime
+    frequency
+    timezone
+    tone
+    language
+    emailTo
+    isActive
+    feeds {
       id
-      email
+      url
+      title
+    }
+    createdAt
+  }
+}
+```
+
+**Parameters:**
+
+- `input`: DossierInput object with dossier configuration
+
+**Example Variables:**
+
+```json
+{
+  "input": {
+    "name": "Tech News Daily",
+    "deliveryTime": "08:00",
+    "frequency": "DAILY",
+    "timezone": "America/New_York",
+    "tone": "professional",
+    "language": "english",
+    "emailTo": "user@example.com",
+    "feedUrls": [
+      "https://news.ycombinator.com/rss",
+      "https://techcrunch.com/feed/"
+    ]
+  }
+}
+```
+
+**Returns:** Created dossier with associated feeds
+
+### Update Dossier
+
+```graphql
+mutation UpdateDossier($id: ID!, $input: DossierInput!) {
+  updateDossier(id: $id, input: $input) {
+    id
+    name
+    deliveryTime
+    frequency
+    tone
+    emailTo
+    isActive
+    updatedAt
+  }
+}
       name
     }
   }
@@ -274,33 +445,7 @@ mutation {
 **Authentication:** Not required
 
 **Parameters:**
-- `email` (String!): User email address
-- `password` (String!): User password
-- `name` (String!): User full name
 
-**Returns:** Auth token and user object
-
-### Login
-
-```graphql
-mutation {
-  login(
-    email: "user@example.com"
-    password: "securepassword"
-  ) {
-    token
-    user {
-      id
-      email
-      name
-    }
-  }
-}
-```
-
-**Authentication:** Not required
-
-**Parameters:**
 - `email` (String!): User email
 - `password` (String!): User password
 
@@ -323,6 +468,7 @@ mutation {
 **Authentication:** Required
 
 **Parameters:**
+
 - `url` (String!): RSS feed URL
 
 **Returns:** The created feed
@@ -350,6 +496,7 @@ mutation {
 **Authentication:** Required
 
 **Parameters:**
+
 - `id` (ID!): Feed ID
 - `title` (String): New title (optional)
 - `description` (String): New description (optional)
@@ -368,6 +515,7 @@ mutation {
 **Authentication:** Required
 
 **Parameters:**
+
 - `id` (ID!): Feed ID to delete
 
 **Returns:** Boolean indicating success
@@ -387,6 +535,7 @@ mutation {
 **Authentication:** Required
 
 **Parameters:**
+
 - `id` (ID!): Feed ID to refresh
 
 **Returns:** The refreshed feed
@@ -422,11 +571,11 @@ mutation {
 }
 ```
 
-**Authentication:** Required
+**Parameters:**
 
-**Returns:** The generated digest
+- `feedIds`: Optional array of specific feed IDs to refresh (if omitted, refreshes all)
 
-**Note:** This operation may take a few seconds to complete, especially if using the OpenAI API.
+**Returns:** Refresh operation results with success count and any errors
 
 ## Error Handling
 
@@ -436,8 +585,8 @@ The API returns errors in the standard GraphQL error format:
 {
   "errors": [
     {
-      "message": "unauthorized",
-      "path": ["me"]
+      "message": "Feed not found",
+      "path": ["addFeedToDossier"]
     }
   ],
   "data": null
@@ -445,65 +594,92 @@ The API returns errors in the standard GraphQL error format:
 ```
 
 Common error messages:
-- `unauthorized`: Authentication required or invalid token
-- `invalid credentials`: Login failed
-- `user already exists`: Email already registered
-- `invalid feed URL`: Feed URL is not valid or inaccessible
 
-## Rate Limiting
+- `Dossier not found`: Invalid dossier ID
+- `Feed not found`: Invalid feed ID
+- `Invalid RSS URL`: Feed URL is not accessible or valid
+- `Email delivery failed`: SMTP configuration or network issue
+- `AI processing failed`: Ollama service unavailable
+- `Invalid time format`: Delivery time must be HH:MM format
 
-Currently, there is no rate limiting implemented. This may be added in future versions.
+## AI Tone Options
 
-## Pagination
+Available tone values for dossier configuration:
 
-For queries that return lists (articles, digests), pagination is supported using `limit` and `offset` parameters:
+- `professional`: Standard business communication style
+- `humorous`: Witty and entertaining summaries
+- `analytical`: Data-driven insights and trends
+- `casual`: Relaxed, conversational tone
+- `apocalyptic`: Dramatic, foreboding style with biblical references
+- `orc`: Warcraft-style blunt communication
+- `robot`: Mechanical, technical language
+- `southern_belle`: Polite, charming Southern style
+- `apologetic`: Sympathetic and reassuring
+- `sweary`: Adult language (requires uncensored model)
 
-```graphql
-query {
-  articles(limit: 10, offset: 20) {
-    id
-    title
-  }
-}
-```
+## Frequency Options
 
-## Best Practices
+- `DAILY`: Delivers every day at specified time
+- `WEEKLY`: Delivers once per week on current day
+- `MONTHLY`: Delivers once per month on current date
 
-1. **Always use HTTPS in production**
-2. **Store tokens securely** (e.g., httpOnly cookies or secure storage)
-3. **Handle errors gracefully** in your client application
-4. **Use pagination** for large result sets
-5. **Request only needed fields** to reduce response size
-6. **Refresh tokens** before they expire (24-hour lifetime)
+## Timezone Support
+
+Uses IANA timezone database format:
+
+- `America/New_York`
+- `Europe/London`
+- `Asia/Tokyo`
+- `UTC`
 
 ## Examples
 
-### Complete User Flow
+### Complete Dossier Setup
 
 ```graphql
-# 1. Register
+# 1. Create dossier with feeds
 mutation {
-  register(
-    email: "new@example.com"
-    password: "password123"
-    name: "New User"
+  createDossier(
+    input: {
+      name: "Morning Tech News"
+      deliveryTime: "08:00"
+      frequency: DAILY
+      timezone: "America/New_York"
+      tone: "professional"
+      language: "english"
+      emailTo: "user@example.com"
+      feedUrls: [
+        "https://news.ycombinator.com/rss"
+        "https://techcrunch.com/feed/"
+      ]
+    }
   ) {
-    token
-    user { id email }
+    id
+    name
+    feeds {
+      id
+      title
+    }
   }
 }
 
-# 2. Add a feed (use token from step 1)
+# 2. Test email delivery
 mutation {
-  addFeed(url: "https://news.ycombinator.com/rss") {
+  testDossier(id: "1") {
+    success
+    message
+  }
+}
+
+# 3. Add more feeds later
+mutation {
+  addFeedToDossier(
+    dossierId: "1"
+    url: "https://www.theverge.com/rss/index.xml"
+  ) {
     id
     title
   }
-}
-
-# 3. Refresh feeds
-mutation {
-  refreshAllFeeds
 }
 
 # 4. Get articles
@@ -525,6 +701,7 @@ mutation {
 ## Support
 
 For issues or questions about the API:
+
 - Open an issue on GitHub
 - Check the main [README.md](README.md) for more information
 - See [QUICKSTART.md](QUICKSTART.md) for getting started
