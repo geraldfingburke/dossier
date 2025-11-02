@@ -5,57 +5,52 @@ This document provides comprehensive information about the Dossier system's Grap
 ## Base URLs
 
 - **Development**: `http://localhost:8080/graphql`
-- **GraphQL Playground**: `http://localhost:8080/graphql/playground`
+- **Production**: Configure via environment variables
 
 ## Authentication
 
-The Dossier system uses a **single-user design** with no authentication required
+The Dossier system uses a **single-user design** with no authentication required. All mutations and queries are accessible without tokens or credentials.
 
 ## Core Concepts
 
-- **Dossier**: A configuration for automated email delivery with RSS feeds, schedule, and AI settings
-- **Feed**: RSS/Atom feed sources that provide articles
-- **Article**: Individual news items collected from feeds
-- **Delivery**: Historical record of sent dossier emails
+- **DossierConfig**: A configuration for automated email delivery with RSS feeds, schedule, and AI settings
+- **Dossier**: A historical record of a generated and sent digest email
+- **Article**: Individual news items collected from RSS feeds
+- **Tone**: AI personality/style settings for content generation (system defaults + custom)
 
 ## GraphQL Schema
 
 ### Core Types
+
+#### DossierConfig
+
+```graphql
+type DossierConfig {
+  id: ID!
+  title: String! # Display name (e.g., "Tech News Daily")
+  email: String! # Delivery email address
+  feedUrls: [String!]! # RSS/Atom feed URLs
+  articleCount: Int! # Number of articles to include per digest
+  frequency: String! # "daily", "weekly", or "monthly"
+  deliveryTime: String! # HH:MM format (24-hour)
+  timezone: String! # IANA timezone (e.g., "America/New_York")
+  tone: String # AI tone name (references Tone.name)
+  language: String # Summary language (e.g., "english", "spanish")
+  specialInstructions: String # Custom AI instructions
+  active: Boolean! # Whether scheduler processes this config
+  createdAt: String!
+}
+```
 
 #### Dossier
 
 ```graphql
 type Dossier {
   id: ID!
-  name: String! # e.g., "Tech News", "Sports Updates"
-  deliveryTime: String! # e.g., "08:00" (24-hour format)
-  frequency: Frequency! # DAILY, WEEKLY, MONTHLY
-  timezone: String # e.g., "America/New_York"
-  tone: String! # AI summary tone
-  language: String # Summary language (default: "english")
-  specialInstructions: String # Custom AI prompts
-  emailTo: String! # Delivery email address
-  isActive: Boolean!
-  feeds: [Feed!]! # Associated RSS feeds
-  deliveries: [DossierDelivery!]! # Delivery history
-  createdAt: String!
-  updatedAt: String!
-}
-```
-
-#### Feed
-
-```graphql
-type Feed {
-  id: ID!
-  url: String! # RSS/Atom feed URL
-  title: String # Feed title from metadata
-  description: String # Feed description
-  lastFetchedAt: String # Last successful fetch time
-  articles: [Article!]! # Articles from this feed
-  dossiers: [Dossier!]! # Dossiers using this feed
-  createdAt: String!
-  updatedAt: String!
+  configId: ID! # Reference to DossierConfig
+  subject: String! # Email subject line
+  content: String! # Generated HTML email content
+  sentAt: String! # Timestamp when email was sent
 }
 ```
 
@@ -64,332 +59,110 @@ type Feed {
 ```graphql
 type Article {
   id: ID!
-  feedId: ID! # Reference to source feed
   title: String! # Article headline
   link: String! # Original article URL (unique)
   description: String # Article summary/excerpt
   content: String # Full article content
   author: String # Article author
   publishedAt: String! # Original publication date
-  feed: Feed! # Source feed relationship
-  createdAt: String!
+  createdAt: String! # When article was fetched
 }
 ```
 
-#### DossierDelivery
+#### Tone
 
 ```graphql
-type DossierDelivery {
+type Tone {
   id: ID!
-  dossierId: ID! # Reference to dossier
-  deliveredAt: String! # Delivery timestamp with timezone
-  status: DeliveryStatus! # SENT, FAILED
-  emailContent: String # Generated HTML email content
-  articleCount: Int! # Number of articles in delivery
-  dossier: Dossier! # Dossier relationship
+  name: String! # Unique tone identifier (e.g., "professional")
+  prompt: String! # AI system prompt for this tone
+  isSystemDefault: Boolean! # Whether this is a built-in tone
+  createdAt: String!
+  updatedAt: String!
 }
 ```
 
-#### Enums
+#### SchedulerStatus
 
 ```graphql
-enum Frequency {
-  DAILY
-  WEEKLY
-  MONTHLY
-}
-
-enum DeliveryStatus {
-  SENT
-  FAILED
+type SchedulerStatus {
+  running: Boolean! # Whether scheduler is active
+  nextCheck: String # Timestamp of next scheduler tick
+  activeDossiers: Int! # Count of active DossierConfigs
 }
 ```
 
 ### Input Types
 
-#### DossierInput
+#### DossierConfigInput
 
 ```graphql
-input DossierInput {
-  name: String!
-  deliveryTime: String! # Format: "HH:MM" (24-hour)
-  frequency: Frequency!
-  timezone: String # IANA timezone (optional)
-  tone: String! # AI tone selection
+input DossierConfigInput {
+  title: String!
+  email: String!
+  feedUrls: [String!]!
+  articleCount: Int!
+  frequency: String! # "daily", "weekly", or "monthly"
+  deliveryTime: String! # HH:MM format (24-hour)
+  timezone: String! # IANA timezone
+  tone: String # Tone name (optional)
   language: String # Summary language (optional)
   specialInstructions: String # Custom AI instructions (optional)
-  emailTo: String! # Delivery email address
-  feedUrls: [String!]! # Initial RSS feed URLs
+}
+```
+
+#### ToneInput
+
+```graphql
+input ToneInput {
+  name: String! # Unique tone identifier
+  prompt: String! # AI system prompt
 }
 ```
 
 ## Queries
 
-### Get All Dossiers
+### Get All Dossier Configs
 
 ```graphql
 query {
-  dossiers {
+  dossierConfigs {
     id
-    name
-    deliveryTime
+    title
+    email
+    feedUrls
+    articleCount
     frequency
-    timezone
-    tone
-    language
-    emailTo
-    isActive
-    feeds {
-      id
-      url
-      title
-    }
-    deliveries(limit: 5) {
-      deliveredAt
-      status
-      articleCount
-    }
-    createdAt
-  }
-}
-```
-
-**Returns:** All configured dossiers with their associated feeds and recent deliveries
-
-### Get Specific Dossier
-
-```graphql
-query GetDossier($id: ID!) {
-  dossier(id: $id) {
-    id
-    name
     deliveryTime
-    frequency
     timezone
     tone
     language
     specialInstructions
-    emailTo
-    isActive
-    feeds {
-      id
-      url
-      title
-      description
-      lastFetchedAt
-    }
-    deliveries {
-      id
-      deliveredAt
-      status
-      articleCount
-      emailContent
-    }
-    createdAt
-    updatedAt
-  }
-}
-```
-
-**Parameters:**
-
-- `id`: Dossier ID
-
-**Returns:** Detailed dossier information including full delivery history
-
-### Get All Feeds
-
-```graphql
-query {
-  feeds {
-    id
-    url
-    title
-    description
-    lastFetchedAt
-    dossiers {
-      id
-      name
-    }
-    createdAt
-    updatedAt
-  }
-}
-```
-
-**Returns:** All RSS feeds in the system with associated dossier information
-
-### Get Articles
-
-```graphql
-query GetArticles($limit: Int, $offset: Int, $feedId: ID) {
-  articles(limit: $limit, offset: $offset, feedId: $feedId) {
-    id
-    title
-    link
-    description
-    author
-    publishedAt
-    feed {
-      title
-      url
-    }
+    active
     createdAt
   }
 }
 ```
 
-**Parameters:**
+**Returns:** All dossier configurations
 
-- `limit`: Number of articles to return (optional, default: 50)
-- `offset`: Pagination offset (optional, default: 0)
-- `feedId`: Filter by specific feed (optional)
-
-**Returns:** Paginated list of articles, optionally filtered by feed
-
-### Search Articles
+### Get Single Dossier Config
 
 ```graphql
-query SearchArticles($query: String!, $limit: Int) {
-  searchArticles(query: $query, limit: $limit) {
+query GetDossierConfig($id: ID!) {
+  dossierConfig(id: $id) {
     id
     title
-    link
-    description
-    publishedAt
-    feed {
-      title
-    }
-  }
-}
-```
-
-**Parameters:**
-
-- `query`: Search term for article titles and descriptions
-- `limit`: Maximum results (optional, default: 20)
-
-**Returns:** Articles matching the search query
-}
-
-````
-
-**Authentication:** Required
-
-**Parameters:**
-- `limit` (Int): Maximum number of articles to return (default: 50)
-- `offset` (Int): Number of articles to skip (default: 0)
-
-### Get Single Article
-
-```graphql
-query {
-  article(id: "1") {
-    id
-    title
-    link
-    description
-    content
-    author
-    publishedAt
-  }
-}
-````
-
-**Authentication:** Required
-
-**Parameters:**
-
-- `id` (ID!): Article ID
-
-### Get Digests
-
-```graphql
-query {
-  digests(limit: 10) {
-    id
-    userId
-    date
-    summary
-    createdAt
-    articles {
-      id
-      title
-      link
-    }
-  }
-}
-```
-
-**Authentication:** Required
-
-**Parameters:**
-
-- `limit` (Int): Maximum number of digests to return (default: 10)
-
-### Get Single Digest
-
-```graphql
-query {
-  digest(id: "1") {
-    id
-    date
-    summary
-    articles {
-      title
-      link
-    }
-  }
-}
-```
-
-**Authentication:** Required
-
-**Parameters:**
-
-- `id` (ID!): Digest ID
-
-### Get Latest Digest
-
-```graphql
-query {
-  latestDigest {
-    id
-    date
-    summary
-    articles {
-      title
-      link
-    }
-  }
-}
-```
-
-**Authentication:** Required
-
-**Returns:** The most recent digest for the current user
-
-## Mutations
-
-### Create Dossier
-
-```graphql
-mutation CreateDossier($input: DossierInput!) {
-  createDossier(input: $input) {
-    id
-    name
-    deliveryTime
+    email
+    feedUrls
+    articleCount
     frequency
+    deliveryTime
     timezone
     tone
     language
-    emailTo
-    isActive
-    feeds {
-      id
-      url
-      title
-    }
+    specialInstructions
+    active
     createdAt
   }
 }
@@ -397,185 +170,323 @@ mutation CreateDossier($input: DossierInput!) {
 
 **Parameters:**
 
-- `input`: DossierInput object with dossier configuration
+- `id`: DossierConfig ID
+
+**Returns:** Specific dossier configuration or null if not found
+
+### Get Dossier History
+
+```graphql
+query GetDossiers($configId: ID, $limit: Int) {
+  dossiers(configId: $configId, limit: $limit) {
+    id
+    configId
+    subject
+    content
+    sentAt
+  }
+}
+```
+
+**Parameters:**
+
+- `configId`: Filter by specific DossierConfig (optional)
+- `limit`: Maximum number of dossiers to return (optional)
+
+**Returns:** Historical records of generated and sent dossiers
+
+### Get Scheduler Status
+
+```graphql
+query {
+  schedulerStatus {
+    running
+    nextCheck
+    activeDossiers
+  }
+}
+```
+
+**Returns:** Current scheduler state and statistics
+
+### Get All Tones
+
+```graphql
+query {
+  tones {
+    id
+    name
+    prompt
+    isSystemDefault
+    createdAt
+    updatedAt
+  }
+}
+```
+
+**Returns:** All available AI tones (system defaults + custom)
+
+### Get Single Tone
+
+```graphql
+query GetTone($id: ID!) {
+  tone(id: $id) {
+    id
+    name
+    prompt
+    isSystemDefault
+    createdAt
+    updatedAt
+  }
+}
+```
+
+**Parameters:**
+
+- `id`: Tone ID
+
+**Returns:** Specific tone or null if not found
+
+## Mutations
+
+### Create Dossier Config
+
+```graphql
+mutation CreateDossierConfig($input: DossierConfigInput!) {
+  createDossierConfig(input: $input) {
+    id
+    title
+    email
+    feedUrls
+    frequency
+    deliveryTime
+    timezone
+    tone
+    active
+    createdAt
+  }
+}
+```
+
+**Parameters:**
+
+- `input`: DossierConfigInput object with configuration
 
 **Example Variables:**
 
 ```json
 {
   "input": {
-    "name": "Tech News Daily",
-    "deliveryTime": "08:00",
-    "frequency": "DAILY",
-    "timezone": "America/New_York",
-    "tone": "professional",
-    "language": "english",
-    "emailTo": "user@example.com",
+    "title": "Tech News Daily",
+    "email": "user@example.com",
     "feedUrls": [
       "https://news.ycombinator.com/rss",
       "https://techcrunch.com/feed/"
-    ]
+    ],
+    "articleCount": 15,
+    "frequency": "daily",
+    "deliveryTime": "08:00",
+    "timezone": "America/New_York",
+    "tone": "professional",
+    "language": "english"
   }
 }
 ```
 
-**Returns:** Created dossier with associated feeds
+**Returns:** Created dossier configuration
 
-### Update Dossier
+### Update Dossier Config
 
 ```graphql
-mutation UpdateDossier($id: ID!, $input: DossierInput!) {
-  updateDossier(id: $id, input: $input) {
+mutation UpdateDossierConfig($id: ID!, $input: DossierConfigInput!) {
+  updateDossierConfig(id: $id, input: $input) {
     id
-    name
-    deliveryTime
+    title
+    email
     frequency
-    tone
-    emailTo
-    isActive
-    updatedAt
-  }
-}
-      name
-    }
-  }
-}
-```
-
-**Authentication:** Not required
-
-**Parameters:**
-
-- `email` (String!): User email
-- `password` (String!): User password
-
-**Returns:** Auth token and user object
-
-### Add Feed
-
-```graphql
-mutation {
-  addFeed(url: "https://news.ycombinator.com/rss") {
-    id
-    url
-    title
-    description
+    deliveryTime
     active
   }
 }
 ```
 
-**Authentication:** Required
-
 **Parameters:**
 
-- `url` (String!): RSS feed URL
+- `id`: DossierConfig ID to update
+- `input`: DossierConfigInput with new values
 
-**Returns:** The created feed
+**Returns:** Updated dossier configuration
 
-**Note:** The feed is validated before being added. Articles are fetched asynchronously.
-
-### Update Feed
+### Delete Dossier Config
 
 ```graphql
-mutation {
-  updateFeed(
-    id: "1"
-    title: "My Custom Title"
-    description: "My custom description"
-    active: true
-  ) {
-    id
-    title
-    description
-    active
-  }
+mutation DeleteDossierConfig($id: ID!) {
+  deleteDossierConfig(id: $id)
 }
 ```
 
-**Authentication:** Required
-
 **Parameters:**
 
-- `id` (ID!): Feed ID
-- `title` (String): New title (optional)
-- `description` (String): New description (optional)
-- `active` (Boolean): Active status (optional)
-
-**Returns:** The updated feed
-
-### Delete Feed
-
-```graphql
-mutation {
-  deleteFeed(id: "1")
-}
-```
-
-**Authentication:** Required
-
-**Parameters:**
-
-- `id` (ID!): Feed ID to delete
+- `id`: DossierConfig ID to delete
 
 **Returns:** Boolean indicating success
 
-### Refresh Single Feed
+### Toggle Dossier Config Active State
 
 ```graphql
-mutation {
-  refreshFeed(id: "1") {
+mutation ToggleDossierConfig($id: ID!, $active: Boolean!) {
+  toggleDossierConfig(id: $id, active: $active) {
     id
-    title
+    active
+  }
+}
+```
+
+**Parameters:**
+
+- `id`: DossierConfig ID
+- `active`: New active state
+
+**Returns:** Updated dossier configuration
+
+### Generate and Send Dossier (Manual Trigger)
+
+```graphql
+mutation GenerateAndSendDossier($configId: ID!) {
+  generateAndSendDossier(configId: $configId) {
+    id
+    configId
+    subject
+    content
+    sentAt
+  }
+}
+```
+
+**Parameters:**
+
+- `configId`: DossierConfig ID to generate and send
+
+**Returns:** Generated dossier with email content
+
+**Note:** This manually triggers dossier generation, bypassing the scheduler
+
+### Send Test Email
+
+```graphql
+mutation SendTestEmail($configId: ID!) {
+  sendTestEmail(configId: $configId)
+}
+```
+
+**Parameters:**
+
+- `configId`: DossierConfig ID to test
+
+**Returns:** Boolean indicating if test email was sent successfully
+
+**Note:** Generates a test dossier and sends it to the configured email address
+
+### Test Email Connection
+
+```graphql
+mutation TestEmailConnection(
+  $email: String!
+  $smtpHost: String!
+  $smtpPort: Int!
+  $smtpUser: String!
+  $smtpPass: String!
+) {
+  testEmailConnection(
+    email: $email
+    smtpHost: $smtpHost
+    smtpPort: $smtpPort
+    smtpUser: $smtpUser
+    smtpPass: $smtpPass
+  )
+}
+```
+
+**Parameters:**
+
+- `email`: Test recipient email
+- `smtpHost`: SMTP server hostname
+- `smtpPort`: SMTP server port
+- `smtpUser`: SMTP username
+- `smtpPass`: SMTP password
+
+**Returns:** Boolean indicating if SMTP connection and email send succeeded
+
+**Note:** Tests raw SMTP credentials without creating a dossier config
+
+### Create Custom Tone
+
+```graphql
+mutation CreateTone($input: ToneInput!) {
+  createTone(input: $input) {
+    id
+    name
+    prompt
+    isSystemDefault
+    createdAt
+  }
+}
+```
+
+**Parameters:**
+
+- `input`: ToneInput object with name and prompt
+
+**Example Variables:**
+
+```json
+{
+  "input": {
+    "name": "poetic",
+    "prompt": "Write in a lyrical, poetic style with metaphors and elegant prose"
+  }
+}
+```
+
+**Returns:** Created tone
+
+### Update Tone
+
+```graphql
+mutation UpdateTone($id: ID!, $input: ToneInput!) {
+  updateTone(id: $id, input: $input) {
+    id
+    name
+    prompt
     updatedAt
   }
 }
 ```
 
-**Authentication:** Required
-
 **Parameters:**
 
-- `id` (ID!): Feed ID to refresh
+- `id`: Tone ID to update
+- `input`: ToneInput with new values
 
-**Returns:** The refreshed feed
+**Returns:** Updated tone
 
-### Refresh All Feeds
+**Note:** Cannot update system default tones
 
-```graphql
-mutation {
-  refreshAllFeeds
-}
-```
-
-**Authentication:** Required
-
-**Returns:** Boolean indicating the operation was started
-
-**Note:** This operation runs asynchronously in the background.
-
-### Generate Digest
+### Delete Tone
 
 ```graphql
-mutation {
-  generateDigest {
-    id
-    date
-    summary
-    articles {
-      id
-      title
-      link
-    }
-  }
+mutation DeleteTone($id: ID!) {
+  deleteTone(id: $id)
 }
 ```
 
 **Parameters:**
 
-- `feedIds`: Optional array of specific feed IDs to refresh (if omitted, refreshes all)
+- `id`: Tone ID to delete
 
-**Returns:** Refresh operation results with success count and any errors
+**Returns:** Boolean indicating success
+
+**Note:** Cannot delete system default tones
 
 ## Error Handling
 
@@ -585,8 +496,8 @@ The API returns errors in the standard GraphQL error format:
 {
   "errors": [
     {
-      "message": "Feed not found",
-      "path": ["addFeedToDossier"]
+      "message": "dossier config not found",
+      "path": ["dossierConfig"]
     }
   ],
   "data": null
@@ -595,113 +506,233 @@ The API returns errors in the standard GraphQL error format:
 
 Common error messages:
 
-- `Dossier not found`: Invalid dossier ID
-- `Feed not found`: Invalid feed ID
-- `Invalid RSS URL`: Feed URL is not accessible or valid
-- `Email delivery failed`: SMTP configuration or network issue
-- `AI processing failed`: Ollama service unavailable
-- `Invalid time format`: Delivery time must be HH:MM format
+- `dossier config not found`: Invalid DossierConfig ID
+- `tone not found`: Invalid Tone ID
+- `cannot delete system default tone`: Attempted to delete built-in tone
+- `cannot update system default tone`: Attempted to modify built-in tone
+- `invalid email format`: Email address is malformed
+- `invalid time format`: Delivery time must be HH:MM format (24-hour)
+- `invalid timezone`: Timezone is not a valid IANA timezone
+- `invalid frequency`: Frequency must be "daily", "weekly", or "monthly"
+- `failed to fetch RSS feed`: One or more feed URLs are inaccessible
+- `AI generation failed`: Ollama service error or model unavailable
+- `email delivery failed`: SMTP configuration issue or network error
 
-## AI Tone Options
+## System Default Tones
 
-Available tone values for dossier configuration:
+The following tones are provided by default and cannot be modified or deleted:
 
-- `professional`: Standard business communication style
-- `humorous`: Witty and entertaining summaries
-- `analytical`: Data-driven insights and trends
-- `casual`: Relaxed, conversational tone
-- `apocalyptic`: Dramatic, foreboding style with biblical references
-- `orc`: Warcraft-style blunt communication
-- `robot`: Mechanical, technical language
-- `southern_belle`: Polite, charming Southern style
-- `apologetic`: Sympathetic and reassuring
-- `sweary`: Adult language (requires uncensored model)
+1. **professional**: Standard business communication style
+2. **humorous**: Witty and entertaining summaries
+3. **analytical**: Data-driven insights and trends analysis
+4. **casual**: Relaxed, conversational tone
+5. **apocalyptic**: Dramatic, foreboding style with biblical references
+6. **orc**: Warcraft-style blunt communication ("Me Grognak!")
+7. **robot**: Mechanical, technical language ("EXECUTING SUMMARY PROTOCOL")
+8. **southern_belle**: Polite, charming Southern style ("Well, bless your heart")
+9. **apologetic**: Sympathetic and reassuring ("I'm so sorry to report...")
+10. **sweary**: Adult language (requires uncensored LLM model)
+
+Custom tones can be created via the `createTone` mutation.
 
 ## Frequency Options
 
-- `DAILY`: Delivers every day at specified time
-- `WEEKLY`: Delivers once per week on current day
-- `MONTHLY`: Delivers once per month on current date
+- `daily`: Delivers every day at the specified time
+- `weekly`: Delivers once per week (same day of week)
+- `monthly`: Delivers once per month (same day of month)
+
+**Note:** Frequencies are case-insensitive strings, not enums
 
 ## Timezone Support
 
-Uses IANA timezone database format:
+Uses IANA timezone database format. Examples:
 
-- `America/New_York`
-- `Europe/London`
-- `Asia/Tokyo`
-- `UTC`
+- `America/New_York` - Eastern Time (US)
+- `America/Chicago` - Central Time (US)
+- `America/Denver` - Mountain Time (US)
+- `America/Los_Angeles` - Pacific Time (US)
+- `Europe/London` - UK
+- `Europe/Paris` - Central European Time
+- `Asia/Tokyo` - Japan
+- `UTC` - Coordinated Universal Time
 
-## Examples
+## AI Generation
 
-### Complete Dossier Setup
+Dossier uses **Ollama** for local LLM-based content generation:
+
+- **Model**: llama3.2:3b (default) or dolphin-mistral (uncensored, for sweary tone)
+- **Temperature**: 0.7 (balanced creativity)
+- **Max Tokens**: 2000 (for comprehensive summaries)
+- **Endpoint**: Configurable via `OLLAMA_URL` environment variable
+
+The AI summarization pipeline:
+
+1. Fetch articles from configured RSS feeds
+2. Filter to `articleCount` most recent articles
+3. Format articles with title, description, link
+4. Apply tone-specific system prompt
+5. Apply language and special instructions
+6. Generate markdown-formatted summary
+7. Convert to HTML email template
+
+## Scheduler Behavior
+
+The scheduler runs continuously with these characteristics:
+
+- **Granularity**: 1-minute ticker
+- **Timezone-Aware**: Converts delivery times to UTC for comparison
+- **Frequency Rules**:
+  - Daily: Generates if current time matches delivery time
+  - Weekly: Generates if current day matches last generation day + 7 days
+  - Monthly: Generates if current day matches last generation day + 1 month
+- **Duplicate Prevention**: Tracks last generation time per config
+- **Concurrency**: Processes each dossier in separate goroutine
+- **Error Resilience**: Individual failures don't stop scheduler
+
+## Email Delivery
+
+Email delivery uses SMTP with TLS encryption:
+
+- **Configuration**: Via environment variables
+  - `SMTP_HOST`: SMTP server hostname
+  - `SMTP_PORT`: SMTP server port (typically 587)
+  - `SMTP_USER`: SMTP username
+  - `SMTP_PASS`: SMTP password
+  - `SMTP_FROM`: Sender email address
+- **Format**: HTML emails with inline CSS
+- **Template**: Professional layout with article cards
+
+## RSS Feed Support
+
+Supported feed formats:
+
+- RSS 1.0
+- RSS 2.0
+- Atom 1.0
+
+The RSS service handles:
+
+- Multi-feed aggregation
+- Duplicate detection (by link URL)
+- Missing field handling (graceful degradation)
+- Feed validation and error recovery
+- Date parsing from multiple formats
+
+## Complete Workflow Example
 
 ```graphql
-# 1. Create dossier with feeds
+# 1. Check available tones
+query {
+  tones {
+    name
+    prompt
+  }
+}
+
+# 2. Create dossier configuration
 mutation {
-  createDossier(
+  createDossierConfig(
     input: {
-      name: "Morning Tech News"
-      deliveryTime: "08:00"
-      frequency: DAILY
-      timezone: "America/New_York"
-      tone: "professional"
-      language: "english"
-      emailTo: "user@example.com"
+      title: "Morning Tech Digest"
+      email: "user@example.com"
       feedUrls: [
         "https://news.ycombinator.com/rss"
         "https://techcrunch.com/feed/"
+        "https://www.theverge.com/rss/index.xml"
       ]
+      articleCount: 15
+      frequency: "daily"
+      deliveryTime: "08:00"
+      timezone: "America/New_York"
+      tone: "professional"
+      language: "english"
     }
-  ) {
-    id
-    name
-    feeds {
-      id
-      title
-    }
-  }
-}
-
-# 2. Test email delivery
-mutation {
-  testDossier(id: "1") {
-    success
-    message
-  }
-}
-
-# 3. Add more feeds later
-mutation {
-  addFeedToDossier(
-    dossierId: "1"
-    url: "https://www.theverge.com/rss/index.xml"
   ) {
     id
     title
+    active
   }
 }
 
-# 4. Get articles
+# 3. Test the configuration
+mutation {
+  sendTestEmail(configId: "1")
+}
+
+# 4. Check scheduler status
 query {
-  articles(limit: 10) {
-    title
-    link
+  schedulerStatus {
+    running
+    activeDossiers
   }
 }
 
-# 5. Generate digest
+# 5. View dossier history
+query {
+  dossiers(configId: "1", limit: 10) {
+    id
+    subject
+    sentAt
+  }
+}
+
+# 6. Manually trigger generation
 mutation {
-  generateDigest {
-    summary
+  generateAndSendDossier(configId: "1") {
+    id
+    subject
+    content
+    sentAt
+  }
+}
+
+# 7. Toggle active state
+mutation {
+  toggleDossierConfig(id: "1", active: false) {
+    id
+    active
   }
 }
 ```
 
+## Environment Variables
+
+Required for full functionality:
+
+```bash
+# Database
+DATABASE_URL=postgres://user:pass@localhost:5432/dossier
+
+# SMTP Email
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+SMTP_FROM=your-email@gmail.com
+
+# Ollama AI
+OLLAMA_URL=http://localhost:11434
+
+# Server
+PORT=8080
+```
+
+## Database Schema
+
+Key tables:
+
+- `dossier_configs`: Dossier configuration and scheduling
+- `dossiers`: Historical records of sent digests
+- `articles`: Cached RSS articles
+- `tones`: AI tone definitions
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for complete schema details.
+
 ## Support
 
-For issues or questions about the API:
+For issues or questions:
 
-- Open an issue on GitHub
-- Check the main [README.md](README.md) for more information
-- See [QUICKSTART.md](QUICKSTART.md) for getting started
+- Open an issue on GitHub: [geraldfingburke/dossier](https://github.com/geraldfingburke/dossier)
+- Check [README.md](README.md) for project overview
+- See [QUICKSTART.md](QUICKSTART.md) for setup instructions
+- Review [ARCHITECTURE.md](ARCHITECTURE.md) for technical details

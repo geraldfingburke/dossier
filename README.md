@@ -4,42 +4,44 @@ An automated RSS digest system that sends personalized email summaries on your s
 
 ## Features
 
-- 📧 **Automated Email Delivery**: Scheduled dossiers sent directly to your inbox
+- 📧 **Automated Email Delivery**: Scheduled digests sent directly to your inbox
 - 🤖 **Local AI Processing**: Free AI summaries using Ollama (no OpenAI required)
-- 📰 **Multi-Feed Support**: Combine articles from multiple RSS feeds
-- 🎭 **Multiple Tones**: Professional, humorous, analytical, apocalyptic, and more
-- 🌍 **Multi-language Support**: Generate dossiers in any language
-- ⏰ **Flexible Scheduling**: Daily, weekly, or monthly delivery
-- 🎯 **Custom Instructions**: Fine-tune AI behavior with special instructions
-- � **Single-User Design**: No accounts needed, perfect for self-hosting
-- 📱 **Modern UI**: Clean, responsive Vue.js interface
-- 📊 **GraphQL API**: Flexible and efficient data fetching
+- 📰 **Multi-Feed Support**: Combine articles from multiple RSS feeds per dossier
+- 🎭 **Customizable Tones**: 10 system defaults + custom user-defined tones
+- 🌍 **Multi-language Support**: Generate summaries in any language
+- ⏰ **Flexible Scheduling**: Daily, weekly, or monthly delivery with timezone support
+- 🎯 **Custom Instructions**: Fine-tune AI behavior with special prompts
+- 👤 **Single-User Design**: No authentication needed, perfect for self-hosting
+- 📱 **Modern UI**: Clean, responsive Vue.js 3 interface with modular CSS
+- 📊 **GraphQL API**: Flexible and type-safe data fetching
 - 🐳 **Docker Support**: Easy deployment with Docker Compose
+- 📜 **Delivery History**: Full archive of sent digests with content
 
 ## Tech Stack
 
 ### Backend
 
-- **Go**: Server-side language
-- **GraphQL**: API layer (graphql-go)
-- **PostgreSQL**: Database with scheduled delivery tracking
-- **Chi**: HTTP router
-- **Ollama**: Local AI processing (free alternative to OpenAI)
-- **SMTP**: Email delivery system
-- **Scheduler**: Cron-like automated dossier generation
+- **Go 1.21+**: Server-side language with goroutines for concurrent processing
+- **GraphQL**: API layer (github.com/graphql-go/graphql)
+- **PostgreSQL 15**: Database with timezone-aware scheduling
+- **Ollama**: Local LLM inference (llama3.2:3b, dolphin-mistral)
+- **gofeed**: RSS/Atom feed parsing (supports RSS 1.0, RSS 2.0, Atom 1.0)
+- **SMTP/TLS**: Secure email delivery
+- **Scheduler**: Ticker-based (1-minute) automated delivery system
 
 ### Frontend
 
-- **Vue.js 3**: Frontend framework with Composition API
-- **Vite**: Build tool and dev server
-- **GraphQL Request**: GraphQL client
-- **VeeValidate**: Form validation
+- **Vue.js 3**: Frontend framework with Composition API and `<script setup>`
+- **Vite**: Build tool and dev server with hot module replacement
+- **Vuex**: State management for dossier configs and tones
+- **Modular CSS**: 9 separate stylesheets with design tokens
 
 ### AI & Processing
 
-- **Ollama**: Local LLM inference (llama3.2:3b, dolphin-mistral)
-- **3-Stage Pipeline**: Article selection, content extraction, summary generation
-- **Multiple Models**: Supports various local AI models
+- **Ollama**: Local LLM inference (privacy-focused, no external APIs)
+- **Models**: llama3.2:3b (default), dolphin-mistral (uncensored)
+- **Single-Stage Pipeline**: Article formatting → AI summary generation
+- **Tone System**: Customizable prompts for different writing styles
 
 ## Quick Start
 
@@ -47,7 +49,6 @@ An automated RSS digest system that sends personalized email summaries on your s
 
 - Docker and Docker Compose
 - SMTP email credentials (Gmail, Outlook, etc.)
-- (Optional) OpenAI API key (uses free local LLM by default)
 
 ### 5-Minute Setup
 
@@ -57,22 +58,27 @@ An automated RSS digest system that sends personalized email summaries on your s
    git clone https://github.com/geraldfingburke/dossier.git
    cd dossier
 
-   # Configure SMTP (interactive setup)
-   ./setup-smtp.sh        # Linux/macOS
-   .\setup-smtp.ps1       # Windows PowerShell
+   # Copy and edit environment file
+   cp .env.example .env
+   # Edit .env with your SMTP credentials
    ```
 
 2. **Start the application**
 
    ```bash
    docker-compose up -d
+
+   # Wait for Ollama to download model (first run only, ~2GB)
+   docker-compose logs -f ollama
    ```
 
 3. **Access and configure**
    - Open http://localhost:5173
-   - Click "Add New Dossier"
-   - Configure your RSS feeds, schedule, and preferences
-   - Test with the "Test Email" button
+   - Click "New Dossier Config"
+   - Add RSS feed URLs (one per line)
+   - Set schedule, timezone, and delivery email
+   - Choose AI tone and language
+   - Test with the "Send Test Email" button
 
 That's it! Your automated dossiers will be delivered on schedule.
 
@@ -82,63 +88,78 @@ For detailed setup instructions, see [QUICKSTART.md](QUICKSTART.md)
 
 ### 1. Configuration
 
-- Create dossier configurations with RSS feeds, delivery preferences, and AI tone settings
-- Set flexible schedules: daily, weekly, or monthly delivery
-- Configure multiple dossiers for different topics (tech news, sports, etc.)
+- Create dossier configurations with RSS feed URLs, delivery preferences, and AI settings
+- Set flexible schedules: daily, weekly, or monthly delivery with timezone support
+- Configure multiple dossiers for different topics (tech news, sports, finance, etc.)
+- Customize AI behavior with tone selection and special instructions
 
 ### 2. Automated Processing
 
-- **Article Collection**: Fetches articles from configured RSS feeds
-- **AI Selection**: Intelligently selects most relevant articles
-- **Content Extraction**: Cleans and extracts factual information
-- **Summary Generation**: Creates personalized summaries with your chosen tone
+- **Scheduler**: Checks every minute for due dossiers (timezone-aware)
+- **Article Fetching**: Concurrently fetches articles from all configured RSS feeds
+- **Article Aggregation**: Sorts by published date, limits to configured article count
+- **AI Summary**: Generates personalized summary using Ollama with chosen tone
+- **Email Delivery**: Sends HTML-formatted email via SMTP with TLS encryption
 
 ### 3. Email Delivery
 
-- Generates HTML email with formatted summaries
-- Includes links to original articles
-- Sends at your scheduled time with timezone support
+- Generates professional HTML email with article summaries
+- Includes article titles, descriptions, and links to original sources
+- Sends at your scheduled time in your specified timezone
 - Tracks delivery history to prevent duplicates
+- Archives full content for later viewing
 
 ## Usage
 
 ### Dossier Management
 
-- **Add New Dossier**: Click the + button to create a new configuration
-- **Configure RSS Feeds**: Add multiple feeds per dossier
-- **Set Delivery Schedule**: Choose frequency and time
-- **Customize AI Behavior**: Select tone, language, and special instructions
-- **Test Configuration**: Use "Test Email" button to verify setup
+- **Create Config**: Click "New Dossier Config" to create a configuration
+- **Configure RSS Feeds**: Add feed URLs (one per line) in the textarea
+- **Set Schedule**: Choose frequency (daily/weekly/monthly), time, and timezone
+- **Customize AI**: Select tone, language, and add special instructions
+- **Test**: Use "Send Test Email" button to verify configuration
+- **Toggle Active**: Enable/disable configs without deletion
+- **View History**: Click "View Digests" to see past deliveries
 
-### Available Tones
+### Available Tones (10 System Defaults)
 
-- **Professional**: Standard business communication style
-- **Humorous**: Witty and entertaining summaries
-- **Analytical**: Data-driven insights and trends
-- **Casual**: Relaxed, conversational tone
-- **Apocalyptic/Doomsayer**: Dramatic, foreboding style with biblical references
-- **Orc**: Warcraft-style blunt communication
-- **Robot**: Mechanical, technical language
-- **Southern Belle**: Polite, charming Southern style
-- **Apologetic**: Sympathetic and reassuring
-- **Sweary**: Adult language for mature audiences (requires uncensored model)
+- **professional**: Standard business communication style
+- **humorous**: Witty and entertaining summaries
+- **analytical**: Data-driven insights and trends
+- **casual**: Relaxed, conversational tone
+- **apocalyptic**: Dramatic, foreboding style with biblical references
+- **orc**: Warcraft-style blunt communication ("Me Grognak!")
+- **robot**: Mechanical, technical language ("EXECUTING SUMMARY PROTOCOL")
+- **southern_belle**: Polite, charming Southern style ("Well, bless your heart")
+- **apologetic**: Sympathetic and reassuring ("I'm so sorry to report...")
+- **sweary**: Adult language (requires uncensored dolphin-mistral model)
+
+**Custom Tones**: Create your own tones with custom prompts via the UI
 
 ### Multi-language Support
 
-Generate dossiers in any language: English, Spanish, French, German, Japanese, etc.
+Generate summaries in any language by setting the language field: English, Spanish, French, German, Japanese, etc.
+
+### Scheduler Behavior
+
+- **Granularity**: Checks every 1 minute for due dossiers
+- **Daily**: Delivers at specified time each day
+- **Weekly**: Delivers same day of week, 7+ days after last delivery
+- **Monthly**: Delivers same day of month, 30+ days after last delivery
+- **Duplicate Prevention**: Tracks last delivery to avoid re-sending
 
 ## Development
 
 ### Project Architecture
 
-The system follows a clean architecture pattern:
+The system follows a clean, single-user architecture:
 
-- **Frontend**: Vue.js 3 SPA with dossier management UI
-- **Backend**: Go GraphQL API with automated scheduler service
-- **Database**: PostgreSQL with time-aware delivery tracking
-- **AI Processing**: Local Ollama integration with multiple models
-- **Email Service**: SMTP with HTML template rendering
-- **Containerization**: Docker Compose for complete environment
+- **Frontend**: Vue.js 3 SPA with modular CSS (9 files) and Vuex state management
+- **Backend**: Go GraphQL API with automated scheduler service (1-minute ticker)
+- **Database**: PostgreSQL with 6 tables (configs, feeds, articles, deliveries, delivery_articles, tones)
+- **AI Processing**: Local Ollama integration (no external APIs)
+- **Email Service**: SMTP/TLS with HTML template rendering
+- **Containerization**: Docker Compose for complete development environment
 
 ### Local Development
 
@@ -150,63 +171,89 @@ The system follows a clean architecture pattern:
 2. **Clone and Start**
 
    ```bash
-   git clone https://github.com/yourusername/dossier.git
+   git clone https://github.com/geraldfingburke/dossier.git
    cd dossier
+
+   # Copy environment file
+   cp .env.example .env
+   # Edit .env with SMTP credentials
+
+   # Start all services
    docker-compose up -d
    ```
 
 3. **Access Services**
-   - Frontend: http://localhost:5173
+   - Frontend: http://localhost:5173 (Vite dev server with HMR)
    - GraphQL API: http://localhost:8080/graphql
-   - GraphQL Playground: http://localhost:8080/graphql/playground
+   - PostgreSQL: localhost:5432 (internal to Docker network)
+   - Ollama: http://localhost:11434 (internal)
 
 ## API Examples
 
 See [API.md](API.md) for complete GraphQL schema documentation.
 
-**Create a dossier:**
+**Create a dossier config:**
 
 ```graphql
 mutation {
-  createDossier(input: {
-    name: "Tech News",
-    deliveryTime: "08:00",
-    frequency: DAILY,
-    tone: "professional",
-    emailTo: "you@example.com"
-  }) {
-    id
-    name
-  }
-```
-
-**Add RSS feed to dossier:**
-
-```graphql
-mutation {
-  addFeedToDossier(dossierId: "123", url: "https://news.ycombinator.com/rss") {
+  createDossierConfig(
+    input: {
+      title: "Tech News Daily"
+      email: "you@example.com"
+      feedUrls: [
+        "https://news.ycombinator.com/rss"
+        "https://techcrunch.com/feed/"
+      ]
+      articleCount: 15
+      frequency: "daily"
+      deliveryTime: "08:00"
+      timezone: "America/New_York"
+      tone: "professional"
+      language: "english"
+    }
+  ) {
     id
     title
+    active
   }
 }
 ```
 
-**Get dossier with delivery history:**
+**Get config with delivery history:**
 
 ```graphql
 query {
-  dossier(id: "123") {
-    name
-    deliveryTime
+  dossierConfig(id: "1") {
+    title
+    email
+    feedUrls
     frequency
-    feeds {
-      url
-      title
+    deliveryTime
+    timezone
+    tone
+  }
+
+  dossiers(configId: "1", limit: 10) {
+    id
+    subject
+    sentAt
+    articleCount
+  }
+}
+```
+
+**Create custom tone:**
+
+```graphql
+mutation {
+  createTone(
+    input: {
+      name: "pirate"
+      prompt: "Write like a pirate with 'arr' and 'matey'. Use nautical metaphors."
     }
-    deliveries {
-      deliveredAt
-      status
-    }
+  ) {
+    id
+    name
   }
 }
 ```
@@ -217,31 +264,52 @@ query {
 dossier/
 ├── server/
 │   ├── cmd/
-│   │   └── main.go              # Server entry point with scheduler
+│   │   └── main.go                 # Entry point with scheduler initialization
 │   └── internal/
-│       ├── ai/                   # Local AI service (Ollama integration)
-│       │   └── ai.go            # 3-stage preprocessing pipeline
-│       ├── database/             # Database connection & migrations
-│       ├── graphql/              # GraphQL schema & resolvers
-│       │   ├── graphql.go       # Resolver implementations
-│       │   └── schema.graphql   # GraphQL schema definition
-│       ├── models/               # Data models & database structs
-│       └── rss/                  # RSS feed fetching & parsing
+│       ├── ai/
+│       │   └── ai.go               # Ollama LLM integration
+│       ├── database/
+│       │   └── database.go         # PostgreSQL connection & schema migrations
+│       ├── email/
+│       │   └── email.go            # SMTP/TLS email delivery
+│       ├── graphql/
+│       │   ├── graphql.go          # Resolvers & schema implementation
+│       │   └── schema.graphql      # GraphQL type definitions
+│       ├── models/
+│       │   └── models.go           # Domain models (DossierConfig, Article, Tone, etc.)
+│       ├── rss/
+│       │   └── rss.go              # RSS/Atom feed fetching & parsing
+│       └── scheduler/
+│           └── scheduler.go        # Automated delivery scheduler (1-minute ticker)
 ├── client/
 │   ├── src/
-│   │   ├── views/                # Main application pages
-│   │   │   ├── DossiersView.vue  # Dossier management
-│   │   ├── store/                # Vuex state management
-│   │   ├── App.vue               # Root component
-│   │   └── main.js               # Entry point
-│   ├── index.html                # HTML template
-│   └── vite.config.js            # Vite configuration
-├── docker-compose.yml            # Complete development environment
-├── Dockerfile                    # Multi-stage production build
-├── go.mod                        # Go dependencies
-├── QUICKSTART.md                 # Quick setup guide
-├── SMTP_SETUP.md                 # Email configuration guide
-└── README.md                     # This file
+│   │   ├── views/
+│   │   │   ├── DossierConfigsView.vue   # Main config management
+│   │   │   ├── DigestsView.vue          # Delivery history
+│   │   │   └── ArticlesView.vue         # Article browser
+│   │   ├── store/
+│   │   │   └── index.js                 # Vuex state management
+│   │   ├── styles/
+│   │   │   ├── variables.css            # Design tokens
+│   │   │   ├── reset.css                # CSS reset
+│   │   │   ├── buttons.css              # Button styles
+│   │   │   ├── forms.css                # Form styles
+│   │   │   ├── components.css           # Component styles
+│   │   │   ├── layout.css               # Layout utilities
+│   │   │   ├── modals.css               # Modal dialogs
+│   │   │   ├── utilities.css            # Utility classes
+│   │   │   └── main.css                 # Main imports
+│   │   ├── App.vue                      # Root component
+│   │   └── main.js                      # Entry point
+│   ├── index.html                       # HTML template
+│   └── vite.config.js                   # Vite configuration
+├── docker-compose.yml                   # Development environment (4 services)
+├── Dockerfile                           # Production build
+├── go.mod                               # Go dependencies
+├── API.md                               # GraphQL API documentation
+├── ARCHITECTURE.md                      # System architecture details
+├── QUICKSTART.md                        # Quick setup guide
+└── README.md                            # This file
 ```
 
 ## Configuration
@@ -255,7 +323,6 @@ dossier/
 **Server:**
 
 - `PORT`: Server port (default: 8080)
-- `JWT_SECRET`: Secret for JWT token signing (default: development-secret-key-change-in-production)
 
 **AI Service:**
 
@@ -267,12 +334,11 @@ dossier/
 
 - `SMTP_HOST`: SMTP server hostname (e.g., smtp.gmail.com)
 - `SMTP_PORT`: SMTP server port (e.g., 587)
-- `SMTP_USERNAME`: SMTP username (your email address)
-- `SMTP_PASSWORD`: SMTP password (app-specific password for Gmail)
-- `FROM_EMAIL`: From address for outgoing emails
-- `FROM_NAME`: Display name for sender (default: "Dossier Service")
+- `SMTP_USER`: SMTP username (your email address)
+- `SMTP_PASS`: SMTP password (app-specific password for Gmail)
+- `SMTP_FROM`: From address for outgoing emails
 
-See [SMTP_SETUP.md](SMTP_SETUP.md) for detailed email configuration instructions.
+See [QUICKSTART.md](QUICKSTART.md) for detailed email configuration instructions.
 
 ### Building for Production
 
@@ -299,12 +365,14 @@ docker run -p 8080:8080 --env-file .env dossier
 
 ## Security Notes
 
-- **Change JWT secret in production**: Use a secure random string for `JWT_SECRET`
-- **Protect SMTP credentials**: Use app-specific passwords, never your main account password
-- **Use environment variables**: Never commit sensitive data to version control
-- **Enable HTTPS in production**: Secure all client-server communication
-- **Local AI processing**: All AI processing happens locally via Ollama - no external API calls
-- **Email security**: SMTP connections use TLS encryption for secure email delivery
+- **Single-User Design**: No authentication system, intended for personal use on private servers
+- **Protect SMTP Credentials**: Use app-specific passwords, never your main account password
+- **Use Environment Variables**: Never commit sensitive data (.env) to version control
+- **Enable HTTPS in Production**: Secure all client-server communication with SSL/TLS
+- **Local AI Processing**: All AI processing happens locally via Ollama - no external API calls or data leakage
+- **Email Security**: SMTP connections use TLS encryption for secure email delivery
+- **Docker Isolation**: Services run in isolated containers with internal networking
+- **No JWT Tokens**: Single-user design eliminates authentication attack surface
 
 ## Contributing
 
@@ -316,11 +384,10 @@ MIT
 
 ## Acknowledgments
 
-- **GraphQL API**: Built with [gqlgen](https://gqlgen.com/) for type-safe GraphQL
-- **RSS Processing**: Powered by [gofeed](https://github.com/mmcdole/gofeed) for reliable feed parsing
-- **Local AI**: [Ollama](https://ollama.ai/) for privacy-focused local language models
-- **Frontend**: [Vue.js 3](https://vuejs.org/) with [Vite](https://vitejs.dev/) for fast development
-- **Email Templates**: HTML email rendering with Go templates
-- **Containerization**: [Docker](https://docker.com/) for consistent deployment
-- **Database**: [PostgreSQL](https://postgresql.org/) for reliable data persistence
-- **Time Handling**: Timezone-aware scheduling with Go's time package
+- **GraphQL API**: Built with [graphql-go/graphql](https://github.com/graphql-go/graphql) for type-safe GraphQL server
+- **RSS Processing**: Powered by [gofeed](https://github.com/mmcdole/gofeed) for reliable RSS/Atom feed parsing
+- **Local AI**: [Ollama](https://ollama.ai/) for privacy-focused local language model inference
+- **Frontend**: [Vue.js 3](https://vuejs.org/) with [Vite](https://vitejs.dev/) for fast development and hot module replacement
+- **Database**: [PostgreSQL](https://postgresql.org/) for reliable data persistence with timezone support
+- **Email**: Go's `net/smtp` package for SMTP/TLS email delivery
+- **Containerization**: [Docker](https://docker.com/) for consistent development and deployment environments
