@@ -83,3 +83,13 @@ type DeliveryArticle struct {
 	DeliveryID int `json:"delivery_id" db:"delivery_id"`
 	ArticleID  int `json:"article_id" db:"article_id"`
 }
+
+// Tone represents a customizable AI tone with its prompt
+type Tone struct {
+	ID              int       `json:"id" db:"id"`
+	Name            string    `json:"name" db:"name"`
+	Prompt          string    `json:"prompt" db:"prompt"`
+	IsSystemDefault bool      `json:"is_system_default" db:"is_system_default"`
+	CreatedAt       time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at" db:"updated_at"`
+}

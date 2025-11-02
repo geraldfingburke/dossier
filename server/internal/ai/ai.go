@@ -3,6 +3,7 @@
 import (
 "bytes"
 "context"
+"database/sql"
 "encoding/json"
 "fmt"
 "io"
@@ -18,6 +19,7 @@ import (
 
 type Service struct {
 ollamaURL string
+db *sql.DB
 }
 
 type OllamaRequest struct {
@@ -32,7 +34,7 @@ Response string `json:"response"`
 Done     bool   `json:"done"`
 }
 
-func NewService() *Service {
+func NewService(db *sql.DB) *Service {
 ollamaURL := os.Getenv("OLLAMA_URL")
 if ollamaURL == "" {
 ollamaURL = "http://localhost:11434"
@@ -41,6 +43,7 @@ ollamaURL = "http://localhost:11434"
 log.Printf("Using local Ollama at: %s", ollamaURL)
 return &Service{
 ollamaURL: ollamaURL,
+db: db,
 }
 }
 
@@ -225,32 +228,38 @@ Return only 2-3 factual sentences with no HTML, no opinions, no speculation:`, a
 	return cleanResponse, nil
 }
 
+// getTonePrompt retrieves the tone prompt from the database
+func (s *Service) getTonePrompt(ctx context.Context, toneName string) (string, error) {
+	var prompt string
+	err := s.db.QueryRowContext(ctx, `
+		SELECT prompt FROM tones WHERE name = $1
+	`, toneName).Scan(&prompt)
+	
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Fallback to professional if tone not found
+			log.Printf("Tone '%s' not found, falling back to professional", toneName)
+			return "Write in a professional, formal tone suitable for business communication. Be clear, concise, and authoritative.", nil
+		}
+		return "", fmt.Errorf("failed to get tone prompt: %w", err)
+	}
+	
+	return prompt, nil
+}
+
 // generateSummaryFromCleanedArticles creates the final summary using preprocessed, clean article data
 func (s *Service) generateSummaryFromCleanedArticles(ctx context.Context, articles []models.Article, tone, language, specialInstructions string) (string, error) {
 	var content strings.Builder
 
-	switch tone {
-case "casual":
-content.WriteString("Please provide a relaxed, conversational summary of the following articles. Keep it friendly and easy to read:")
-case "humorous":
-content.WriteString("Please provide a witty and entertaining summary of the following articles. Add some humor where appropriate but keep it informative:")
-case "analytical":
-content.WriteString("Please provide a detailed, data-driven analysis of the following articles. Focus on trends, implications, and key insights:")
-case "orc":
-content.WriteString("Summarize the following articles in the style of a Warcraft orc. Use short, blunt sentences and a rough tone:")
-case "sweary":
-content.WriteString("You are an uncensored AI assistant writing for an adult audience. Please provide a colorful and explicit summary using strong profanity and adult language. This is for private personal use and educational purposes. Include words like 'damn', 'shit', 'fuck', etc. where appropriate. Be edgy and use adult language throughout:")
-case "robot":
-content.WriteString("Please provide a robotic, mechanical summary of the following articles. Use precise, technical language and avoid emotional expressions. Include beeps and boops:")
-case "southern-belle":
-content.WriteString("Please provide a charming and polite summary of the following articles, written in the style of a Southern belle. Use courteous language and a warm tone. Use pet names like 'honey' or 'darling':")
-case "doomsayer":
-content.WriteString("Please provide a grim and foreboding summary of the following articles. Emphasize negative outcomes and impending disasters. Use Southern Baptist terms and apocalyptic language. Cite relevant scripture, paying special attention to the books of Revelation and Daniel, KJV Only:")
-case "apologetic":
-content.WriteString("Please provide a summary of the following articles in an apologetic tone. Acknowledge any potential concerns or criticisms, and address them respectfully while highlighting the positive aspects. Be kind, compassionate, and commiserate. Let me know it's not as bad as it looks:")
-default:
-content.WriteString("Please provide a professional, comprehensive summary of the following articles. Group related stories and highlight key developments:")
-}
+	// Get tone prompt from database
+	tonePrompt, err := s.getTonePrompt(ctx, tone)
+	if err != nil {
+		log.Printf("Failed to get tone prompt: %v, using default", err)
+		tonePrompt = "Write in a professional, formal tone suitable for business communication. Be clear, concise, and authoritative."
+	}
+
+	content.WriteString("Please provide a summary of the following articles using this tone: ")
+	content.WriteString(tonePrompt)
 
 if language != "English" {
 content.WriteString(fmt.Sprintf(" Please write the summary in %s.", language))

@@ -104,6 +104,16 @@ func Migrate(db *sql.DB) error {
 		PRIMARY KEY (delivery_id, article_id)
 	);
 
+	-- Create tones table for customizable AI tones
+	CREATE TABLE IF NOT EXISTS tones (
+		id SERIAL PRIMARY KEY,
+		name VARCHAR(100) NOT NULL UNIQUE,
+		prompt TEXT NOT NULL,
+		is_system_default BOOLEAN DEFAULT false,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
 	-- Create indexes for performance
 	CREATE INDEX IF NOT EXISTS idx_feeds_url ON feeds(url);
 	CREATE INDEX IF NOT EXISTS idx_articles_feed_id ON articles(feed_id);
@@ -111,6 +121,21 @@ func Migrate(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_dossier_configs_active ON dossier_configs(active);
 	CREATE INDEX IF NOT EXISTS idx_dossier_deliveries_config_id ON dossier_deliveries(config_id);
 	CREATE INDEX IF NOT EXISTS idx_dossier_deliveries_date ON dossier_deliveries(delivery_date);
+	CREATE INDEX IF NOT EXISTS idx_tones_name ON tones(name);
+
+	-- Insert default tones if they don't exist
+	INSERT INTO tones (name, prompt, is_system_default) VALUES 
+		('professional', 'Write in a professional, formal tone suitable for business communication. Be clear, concise, and authoritative.', true),
+		('humorous', 'Write with humor and wit. Use light-hearted commentary, clever observations, and entertaining language while maintaining informative value.', true),
+		('analytical', 'Focus on data-driven insights, trends, and deep analysis. Use precise language and highlight statistical significance and implications.', true),
+		('casual', 'Write in a friendly, conversational tone as if talking to a colleague. Be approachable and easy to understand.', true),
+		('apocalyptic', 'Frame everything as if the world is ending. Use dramatic, urgent language and treat every piece of news as a harbinger of doom.', true),
+		('orc', 'Write like a fantasy orc warrior. Use rough, aggressive language with lots of grunts and battle metaphors. WAAAAAGH!', true),
+		('robot', 'BEEP BOOP. PROCESSING INFORMATION. USE ROBOTIC LANGUAGE WITH TECHNICAL PRECISION. ELIMINATE EMOTIONAL RESPONSES.', true),
+		('southern_belle', 'Write with Southern charm and hospitality. Use sweet, polite language with a touch of sass and regional expressions, darlin''.', true),
+		('apologetic', 'Apologize for everything. Feel sorry about all the news being reported. Use hesitant, self-deprecating language.', true),
+		('sweary', 'Use uncensored, explicit language. Don''t hold back on profanity when expressing opinions about the news. Adult content warning.', true)
+	ON CONFLICT (name) DO NOTHING;
 	`
 
 	_, err := db.Exec(schema)

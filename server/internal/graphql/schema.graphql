@@ -46,11 +46,27 @@ type Dossier {
   sentAt: String!
 }
 
+type Tone {
+  id: ID!
+  name: String!
+  prompt: String!
+  isSystemDefault: Boolean!
+  createdAt: String!
+  updatedAt: String!
+}
+
+input ToneInput {
+  name: String!
+  prompt: String!
+}
+
 type Query {
   dossierConfigs: [DossierConfig!]!
   dossierConfig(id: ID!): DossierConfig
   dossiers(configId: ID, limit: Int): [Dossier!]!
   schedulerStatus: SchedulerStatus!
+  tones: [Tone!]!
+  tone(id: ID!): Tone
 }
 
 type SchedulerStatus {
@@ -66,6 +82,7 @@ type Mutation {
   toggleDossierConfig(id: ID!, active: Boolean!): DossierConfig!
 
   generateAndSendDossier(configId: ID!): Dossier!
+  sendTestEmail(configId: ID!): Boolean!
   testEmailConnection(
     email: String!
     smtpHost: String!
@@ -73,4 +90,8 @@ type Mutation {
     smtpUser: String!
     smtpPass: String!
   ): Boolean!
+
+  createTone(input: ToneInput!): Tone!
+  updateTone(id: ID!, input: ToneInput!): Tone!
+  deleteTone(id: ID!): Boolean!
 }

@@ -154,8 +154,8 @@ func (s *Service) shouldGenerateDossier(config models.DossierConfig) bool {
 	// Parse the timezone
 	location, err := time.LoadLocation(config.Timezone)
 	if err != nil {
-		log.Printf("Invalid timezone %s for config %d, using UTC", config.Timezone, config.ID)
-		location = time.UTC
+		log.Printf("Invalid timezone %s for config %d, using local system time", config.Timezone, config.ID)
+		location = time.Local
 	}
 
 	// Get current time in the config's timezone

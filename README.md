@@ -231,8 +231,6 @@ dossier/
 │   ├── src/
 │   │   ├── views/                # Main application pages
 │   │   │   ├── DossiersView.vue  # Dossier management
-│   │   │   ├── FeedsView.vue     # Feed management
-│   │   │   └── ArticlesView.vue  # Article browsing
 │   │   ├── store/                # Vuex state management
 │   │   ├── App.vue               # Root component
 │   │   └── main.js               # Entry point

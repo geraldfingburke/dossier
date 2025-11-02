@@ -2,6 +2,7 @@ package email
 
 import (
 	"bytes"
+	"crypto/tls"
 	"fmt"
 	"html/template"
 	"log"
@@ -320,17 +321,13 @@ Delivered from your personal news automation system
 	return htmlBuf.String(), textBuf.String(), nil
 }
 
-// sendEmail sends the email using SMTP
+// sendEmail sends the email using SMTP with TLS encryption
 func (s *Service) sendEmail(email DossierEmail) error {
 	// Create message
 	message := s.buildMIMEMessage(email)
 
-	// SMTP authentication
-	auth := smtp.PlainAuth("", s.config.Username, s.config.Password, s.config.SMTPHost)
-
-	// Send email
-	addr := s.config.SMTPHost + ":" + s.config.SMTPPort
-	err := smtp.SendMail(addr, auth, s.config.FromEmail, []string{email.To}, []byte(message))
+	// Send email with TLS
+	err := s.sendSMTPWithTLS(s.config.FromEmail, []string{email.To}, []byte(message))
 	if err != nil {
 		return fmt.Errorf("failed to send email: %w", err)
 	}
@@ -387,24 +384,176 @@ func extractDomain(url string) string {
 	return url
 }
 
-// TestSMTPConnection tests the SMTP configuration
+// TestSMTPConnection tests the SMTP configuration with TLS encryption (supports both direct TLS and STARTTLS)
 func (s *Service) TestSMTPConnection() error {
 	log.Printf("Testing SMTP connection to %s:%s", s.config.SMTPHost, s.config.SMTPPort)
 	
 	addr := s.config.SMTPHost + ":" + s.config.SMTPPort
 	auth := smtp.PlainAuth("", s.config.Username, s.config.Password, s.config.SMTPHost)
+
+	// Try STARTTLS first (port 587), then direct TLS (port 465)
+	if s.config.SMTPPort == "587" {
+		return s.testWithSTARTTLS(auth, addr)
+	}
+	return s.testWithDirectTLS(auth, addr)
+}
+
+// testWithSTARTTLS tests connection using STARTTLS (typically port 587)
+func (s *Service) testWithSTARTTLS(auth smtp.Auth, addr string) error {
+	log.Printf("Testing SMTP connection with STARTTLS")
 	
-	// Try to connect and authenticate
+	// Connect without TLS first
 	client, err := smtp.Dial(addr)
 	if err != nil {
 		return fmt.Errorf("failed to connect to SMTP server: %w", err)
 	}
 	defer client.Quit()
 
+	// Start TLS
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: false,
+		ServerName:         s.config.SMTPHost,
+	}
+
+	if err := client.StartTLS(tlsConfig); err != nil {
+		return fmt.Errorf("failed to start TLS: %w", err)
+	}
+
+	// Authenticate
 	if err := client.Auth(auth); err != nil {
 		return fmt.Errorf("SMTP authentication failed: %w", err)
 	}
 
-	log.Printf("SMTP connection test successful")
+	log.Printf("SMTP connection test successful with STARTTLS")
+	return nil
+}
+
+// testWithDirectTLS tests connection using direct TLS (typically port 465)
+func (s *Service) testWithDirectTLS(auth smtp.Auth, addr string) error {
+	log.Printf("Testing SMTP connection with direct TLS")
+	
+	// Create TLS configuration
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: false,
+		ServerName:         s.config.SMTPHost,
+	}
+
+	// Connect with TLS
+	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	if err != nil {
+		return fmt.Errorf("failed to connect to SMTP server with TLS: %w", err)
+	}
+	defer conn.Close()
+
+	// Create SMTP client from TLS connection
+	client, err := smtp.NewClient(conn, s.config.SMTPHost)
+	if err != nil {
+		return fmt.Errorf("failed to create SMTP client: %w", err)
+	}
+	defer client.Quit()
+
+	// Authenticate
+	if err := client.Auth(auth); err != nil {
+		return fmt.Errorf("SMTP authentication failed: %w", err)
+	}
+
+	log.Printf("SMTP connection test successful with direct TLS")
+	return nil
+}
+
+// sendSMTPWithTLS sends an email using SMTP with TLS encryption (supports both direct TLS and STARTTLS)
+func (s *Service) sendSMTPWithTLS(from string, to []string, msg []byte) error {
+	addr := s.config.SMTPHost + ":" + s.config.SMTPPort
+	auth := smtp.PlainAuth("", s.config.Username, s.config.Password, s.config.SMTPHost)
+
+	// Try STARTTLS first (port 587), then direct TLS (port 465)
+	if s.config.SMTPPort == "587" {
+		return s.sendWithSTARTTLS(from, to, msg, auth, addr)
+	}
+	return s.sendWithDirectTLS(from, to, msg, auth, addr)
+}
+
+// sendWithSTARTTLS sends email using STARTTLS (typically port 587)
+func (s *Service) sendWithSTARTTLS(from string, to []string, msg []byte, auth smtp.Auth, addr string) error {
+	// Connect without TLS first
+	client, err := smtp.Dial(addr)
+	if err != nil {
+		return fmt.Errorf("failed to connect to SMTP server: %w", err)
+	}
+	defer client.Quit()
+
+	// Start TLS
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: false,
+		ServerName:         s.config.SMTPHost,
+	}
+
+	if err := client.StartTLS(tlsConfig); err != nil {
+		return fmt.Errorf("failed to start TLS: %w", err)
+	}
+
+	// Authenticate
+	if err := client.Auth(auth); err != nil {
+		return fmt.Errorf("SMTP authentication failed: %w", err)
+	}
+
+	return s.sendMessage(client, from, to, msg)
+}
+
+// sendWithDirectTLS sends email using direct TLS connection (typically port 465)
+func (s *Service) sendWithDirectTLS(from string, to []string, msg []byte, auth smtp.Auth, addr string) error {
+	// Create TLS configuration
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: false,
+		ServerName:         s.config.SMTPHost,
+	}
+
+	// Connect with TLS
+	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	if err != nil {
+		return fmt.Errorf("failed to connect to SMTP server with TLS: %w", err)
+	}
+	defer conn.Close()
+
+	// Create SMTP client from TLS connection
+	client, err := smtp.NewClient(conn, s.config.SMTPHost)
+	if err != nil {
+		return fmt.Errorf("failed to create SMTP client: %w", err)
+	}
+	defer client.Quit()
+
+	// Authenticate
+	if err := client.Auth(auth); err != nil {
+		return fmt.Errorf("SMTP authentication failed: %w", err)
+	}
+
+	return s.sendMessage(client, from, to, msg)
+}
+
+// sendMessage sends the actual message using the SMTP client
+func (s *Service) sendMessage(client *smtp.Client, from string, to []string, msg []byte) error {
+	// Set sender
+	if err := client.Mail(from); err != nil {
+		return fmt.Errorf("failed to set sender: %w", err)
+	}
+
+	// Set recipients
+	for _, recipient := range to {
+		if err := client.Rcpt(recipient); err != nil {
+			return fmt.Errorf("failed to set recipient %s: %w", recipient, err)
+		}
+	}
+
+	// Send message data
+	writer, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("failed to get data writer: %w", err)
+	}
+	defer writer.Close()
+
+	if _, err := writer.Write(msg); err != nil {
+		return fmt.Errorf("failed to write message: %w", err)
+	}
+
 	return nil
 }

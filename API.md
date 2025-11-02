@@ -9,7 +9,7 @@ This document provides comprehensive information about the Dossier system's Grap
 
 ## Authentication
 
-The Dossier system uses a **single-user design** with no authentication required. All API operations are available directly without tokens or login.
+The Dossier system uses a **single-user design** with no authentication required
 
 ## Core Concepts
 

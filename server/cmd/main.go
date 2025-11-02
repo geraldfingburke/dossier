@@ -34,7 +34,7 @@ func main() {
 	}
 
 	// Initialize services
-	aiService := ai.NewService()
+	aiService := ai.NewService(db)
 	emailService := email.NewService()
 	rssService := rss.NewService(aiService)
 	schedulerService := scheduler.NewService(db, rssService, aiService, emailService)

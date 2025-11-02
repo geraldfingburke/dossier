@@ -135,6 +135,66 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 		},
 	})
 
+	// Dossier (delivery) GraphQL type
+	dossierType := graphql.NewObject(graphql.ObjectConfig{
+		Name: "Dossier",
+		Fields: graphql.Fields{
+			"id": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.ID),
+			},
+			"configId": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.ID),
+			},
+			"subject": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"content": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"sentAt": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+		},
+	})
+
+	// Tone GraphQL type
+	toneType := graphql.NewObject(graphql.ObjectConfig{
+		Name: "Tone",
+		Fields: graphql.Fields{
+			"id": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"name": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"prompt": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"isSystemDefault": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Boolean),
+			},
+			"createdAt": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"updatedAt": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+		},
+	})
+
+	// ToneInput GraphQL input type
+	toneInputType := graphql.NewInputObject(graphql.InputObjectConfig{
+		Name: "ToneInput",
+		Fields: graphql.InputObjectConfigFieldMap{
+			"name": &graphql.InputObjectFieldConfig{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"prompt": &graphql.InputObjectFieldConfig{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+		},
+	})
+
 	// Define the root query
 	rootQuery := graphql.NewObject(graphql.ObjectConfig{
 		Name: "Query",
@@ -216,6 +276,114 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 						"nextCheck":      nil, // TODO: implement next check time
 						"activeDossiers": activeCount,
 					}, nil
+				},
+			},
+			"dossiers": &graphql.Field{
+				Type: graphql.NewList(dossierType),
+				Args: graphql.FieldConfigArgument{
+					"configId": &graphql.ArgumentConfig{
+						Type: graphql.ID,
+					},
+					"limit": &graphql.ArgumentConfig{
+						Type: graphql.Int,
+					},
+				},
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					configId, hasConfigId := p.Args["configId"]
+					limit, hasLimit := p.Args["limit"]
+					
+					query := `
+						SELECT dd.id, dd.config_id, dc.title as subject, dd.summary as content, dd.delivery_date
+						FROM dossier_deliveries dd
+						JOIN dossier_configs dc ON dd.config_id = dc.id
+					`
+					args := []interface{}{}
+					argIndex := 1
+					
+					if hasConfigId {
+						query += " WHERE dd.config_id = $" + fmt.Sprintf("%d", argIndex)
+						args = append(args, configId)
+						argIndex++
+					}
+					
+					query += " ORDER BY dd.delivery_date DESC"
+					
+					if hasLimit {
+						query += " LIMIT $" + fmt.Sprintf("%d", argIndex)
+						args = append(args, limit)
+					}
+
+					rows, err := db.QueryContext(p.Context, query, args...)
+					if err != nil {
+						return nil, err
+					}
+					defer rows.Close()
+
+					var dossiers []map[string]interface{}
+					for rows.Next() {
+						var id, configId int
+						var subject, content, sentAt string
+						
+						err := rows.Scan(&id, &configId, &subject, &content, &sentAt)
+						if err != nil {
+							return nil, err
+						}
+						
+						dossiers = append(dossiers, map[string]interface{}{
+							"id":       fmt.Sprintf("%d", id),
+							"configId": fmt.Sprintf("%d", configId),
+							"subject":  subject,
+							"content":  content,
+							"sentAt":   sentAt,
+						})
+					}
+					
+					return dossiers, nil
+				},
+			},
+			"tones": &graphql.Field{
+				Type: graphql.NewList(toneType),
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					rows, err := db.QueryContext(p.Context, `
+						SELECT id, name, prompt, is_system_default, created_at, updated_at 
+						FROM tones 
+						ORDER BY is_system_default DESC, name ASC
+					`)
+					if err != nil {
+						return nil, err
+					}
+					defer rows.Close()
+
+					var tones []models.Tone
+					for rows.Next() {
+						var tone models.Tone
+						err := rows.Scan(&tone.ID, &tone.Name, &tone.Prompt, &tone.IsSystemDefault, &tone.CreatedAt, &tone.UpdatedAt)
+						if err != nil {
+							return nil, err
+						}
+						tones = append(tones, tone)
+					}
+					return tones, nil
+				},
+			},
+			"tone": &graphql.Field{
+				Type: toneType,
+				Args: graphql.FieldConfigArgument{
+					"id": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.Int),
+					},
+				},
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					id := p.Args["id"].(int)
+					var tone models.Tone
+					err := db.QueryRowContext(p.Context, `
+						SELECT id, name, prompt, is_system_default, created_at, updated_at 
+						FROM tones WHERE id = $1
+					`, id).Scan(&tone.ID, &tone.Name, &tone.Prompt, &tone.IsSystemDefault, &tone.CreatedAt, &tone.UpdatedAt)
+					if err != nil {
+						return nil, err
+					}
+					return &tone, nil
 				},
 			},
 		},
@@ -438,6 +606,103 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 					return true, nil
 				},
 			},
+			"sendTestEmail": &graphql.Field{
+				Type: graphql.Boolean,
+				Args: graphql.FieldConfigArgument{
+					"configId": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.ID),
+					},
+				},
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					configId := p.Args["configId"].(string)
+					
+					// Get dossier config
+					var config models.DossierConfig
+					err := db.QueryRowContext(p.Context, `
+						SELECT id, title, email, feed_urls, article_count, frequency, 
+							   delivery_time::text, timezone, tone, language, special_instructions, 
+							   active, created_at
+						FROM dossier_configs WHERE id = $1
+					`, configId).Scan(&config.ID, &config.Title, &config.Email, pq.Array(&config.FeedURLs),
+						&config.ArticleCount, &config.Frequency, &config.DeliveryTime,
+						&config.Timezone, &config.Tone, &config.Language,
+						&config.SpecialInstructions, &config.Active, &config.CreatedAt)
+					if err != nil {
+						if err == sql.ErrNoRows {
+							return false, fmt.Errorf("dossier configuration not found")
+						}
+						return false, err
+					}
+
+					// Create sample test content
+					testContent := `This is a test email from your Dossier system.
+
+**Configuration Details:**
+- Title: ` + config.Title + `
+- Frequency: ` + config.Frequency + `
+- Delivery Time: ` + config.DeliveryTime + ` (` + config.Timezone + `)
+- Article Count: ` + fmt.Sprintf("%d", config.ArticleCount) + `
+- AI Tone: ` + config.Tone + `
+- Language: ` + config.Language + `
+
+**RSS Feeds:**`
+
+					for i, feedURL := range config.FeedURLs {
+						testContent += fmt.Sprintf("\n%d. %s", i+1, feedURL)
+					}
+
+					testContent += `
+
+**Sample Articles:** _(This is test data)_
+1. **Breaking News: Technology Advances Continue** - Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+2. **Market Update: Economic Trends Show Growth** - Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+3. **Innovation Spotlight: New Developments** - Ut enim ad minim veniam, quis nostrud exercitation ullamco.
+
+---
+*This was a test email sent at ` + time.Now().Format("2006-01-02 15:04:05 MST") + `*
+*Your actual dossiers will contain real articles from your configured RSS feeds.*`
+
+					// Send test email with modified subject
+					testConfig := config
+					testConfig.Title = config.Title + " - Test Email"
+					
+					// Create sample articles for the email template
+					sampleArticles := []models.Article{
+						{
+							ID:          1,
+							Title:       "Breaking News: Technology Advances Continue",
+							Link:        "https://example.com/article1",
+							Description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+							Author:      "Test Author",
+							PublishedAt: time.Now().Format("2006-01-02 15:04:05"),
+						},
+						{
+							ID:          2,
+							Title:       "Market Update: Economic Trends Show Growth", 
+							Link:        "https://example.com/article2",
+							Description: "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+							Author:      "Test Reporter",
+							PublishedAt: time.Now().Add(-1*time.Hour).Format("2006-01-02 15:04:05"),
+						},
+						{
+							ID:          3,
+							Title:       "Innovation Spotlight: New Developments",
+							Link:        "https://example.com/article3", 
+							Description: "Ut enim ad minim veniam, quis nostrud exercitation ullamco.",
+							Author:      "Tech Writer",
+							PublishedAt: time.Now().Add(-2*time.Hour).Format("2006-01-02 15:04:05"),
+						},
+					}
+
+					err = emailService.SendDossier(&testConfig, testContent, sampleArticles)
+					if err != nil {
+						return false, fmt.Errorf("failed to send test email: %w", err)
+					}
+
+					log.Printf("Successfully sent test email for dossier '%s' to %s", config.Title, config.Email)
+					return true, nil
+				},
+			},
 			"testEmailConnection": &graphql.Field{
 				Type: graphql.Boolean,
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
@@ -447,6 +712,82 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 						return false, err
 					}
 					return true, nil
+				},
+			},
+			"createTone": &graphql.Field{
+				Type: toneType,
+				Args: graphql.FieldConfigArgument{
+					"input": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(toneInputType),
+					},
+				},
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					input := p.Args["input"].(map[string]interface{})
+					var tone models.Tone
+					
+					err := db.QueryRowContext(p.Context, `
+						INSERT INTO tones (name, prompt) 
+						VALUES ($1, $2) 
+						RETURNING id, name, prompt, is_system_default, created_at, updated_at
+					`, input["name"], input["prompt"]).Scan(
+						&tone.ID, &tone.Name, &tone.Prompt, &tone.IsSystemDefault, &tone.CreatedAt, &tone.UpdatedAt)
+					if err != nil {
+						return nil, err
+					}
+					return &tone, nil
+				},
+			},
+			"updateTone": &graphql.Field{
+				Type: toneType,
+				Args: graphql.FieldConfigArgument{
+					"id": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.Int),
+					},
+					"input": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(toneInputType),
+					},
+				},
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					id := p.Args["id"].(int)
+					input := p.Args["input"].(map[string]interface{})
+					var tone models.Tone
+					
+					err := db.QueryRowContext(p.Context, `
+						UPDATE tones 
+						SET name = $1, prompt = $2, updated_at = CURRENT_TIMESTAMP 
+						WHERE id = $3 AND is_system_default = false
+						RETURNING id, name, prompt, is_system_default, created_at, updated_at
+					`, input["name"], input["prompt"], id).Scan(
+						&tone.ID, &tone.Name, &tone.Prompt, &tone.IsSystemDefault, &tone.CreatedAt, &tone.UpdatedAt)
+					if err != nil {
+						return nil, err
+					}
+					return &tone, nil
+				},
+			},
+			"deleteTone": &graphql.Field{
+				Type: graphql.Boolean,
+				Args: graphql.FieldConfigArgument{
+					"id": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.Int),
+					},
+				},
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					id := p.Args["id"].(int)
+					
+					result, err := db.ExecContext(p.Context, `
+						DELETE FROM tones WHERE id = $1 AND is_system_default = false
+					`, id)
+					if err != nil {
+						return false, err
+					}
+					
+					rowsAffected, err := result.RowsAffected()
+					if err != nil {
+						return false, err
+					}
+					
+					return rowsAffected > 0, nil
 				},
 			},
 		},

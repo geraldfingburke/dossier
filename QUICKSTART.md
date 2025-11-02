@@ -6,7 +6,6 @@ This guide will help you get Dossier up and running in under 5 minutes using Doc
 
 - Docker and Docker Compose installed
 - SMTP email credentials (Gmail, Outlook, etc.) for email delivery
-- (Optional) OpenAI API key for AI-powered summaries (uses free local LLM by default)
 
 ## Steps
 
