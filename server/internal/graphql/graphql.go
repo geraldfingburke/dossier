@@ -108,7 +108,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 	// ========================================================================
 	// TYPE DEFINITIONS
 	// ========================================================================
-	
+
 	// DossierConfig GraphQL type represents a user's automated digest configuration.
 	//
 	// This type maps to the dossier_configs database table and includes all settings
@@ -155,7 +155,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 				// Database stores time as HH:MM:SS but UI only needs hour and minute.
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					var config *models.DossierConfig
-					
+
 					// Handle both pointer and value types for flexibility
 					switch v := p.Source.(type) {
 					case *models.DossierConfig:
@@ -165,7 +165,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 					default:
 						return nil, fmt.Errorf("unexpected source type: %T", v)
 					}
-					
+
 					// Extract HH:MM from HH:MM:SS format
 					if len(config.DeliveryTime) >= 5 && config.DeliveryTime[2] == ':' {
 						return config.DeliveryTime[:5], nil
@@ -360,7 +360,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 	// ========================================================================
 	// QUERY OPERATIONS
 	// ========================================================================
-	
+
 	// Define the root query with all read-only operations.
 	//
 	// Query operations provide data retrieval without side effects:
@@ -398,9 +398,9 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 					var configs []models.DossierConfig
 					for rows.Next() {
 						var config models.DossierConfig
-						err := rows.Scan(&config.ID, &config.Title, &config.Email, pq.Array(&config.FeedURLs), 
-							&config.ArticleCount, &config.Frequency, &config.DeliveryTime, 
-							&config.Timezone, &config.Tone, &config.Language, 
+						err := rows.Scan(&config.ID, &config.Title, &config.Email, pq.Array(&config.FeedURLs),
+							&config.ArticleCount, &config.Frequency, &config.DeliveryTime,
+							&config.Timezone, &config.Tone, &config.Language,
 							&config.SpecialInstructions, &config.Active, &config.CreatedAt)
 						if err != nil {
 							return nil, err
@@ -428,7 +428,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 				//   - error for database issues
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					id := p.Args["id"].(string)
-					
+
 					var config models.DossierConfig
 					err := db.QueryRowContext(p.Context, `
 						SELECT id, title, email, feed_urls, article_count, frequency, 
@@ -505,7 +505,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					configId, hasConfigId := p.Args["configId"]
 					limit, hasLimit := p.Args["limit"]
-					
+
 					query := `
 						SELECT dd.id, dd.config_id, dc.title as subject, dd.summary as content, dd.delivery_date
 						FROM dossier_deliveries dd
@@ -513,15 +513,15 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 					`
 					args := []interface{}{}
 					argIndex := 1
-					
+
 					if hasConfigId {
 						query += " WHERE dd.config_id = $" + fmt.Sprintf("%d", argIndex)
 						args = append(args, configId)
 						argIndex++
 					}
-					
+
 					query += " ORDER BY dd.delivery_date DESC"
-					
+
 					if hasLimit {
 						query += " LIMIT $" + fmt.Sprintf("%d", argIndex)
 						args = append(args, limit)
@@ -537,12 +537,12 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 					for rows.Next() {
 						var id, configId int
 						var subject, content, sentAt string
-						
+
 						err := rows.Scan(&id, &configId, &subject, &content, &sentAt)
 						if err != nil {
 							return nil, err
 						}
-						
+
 						dossiers = append(dossiers, map[string]interface{}{
 							"id":       fmt.Sprintf("%d", id),
 							"configId": fmt.Sprintf("%d", configId),
@@ -551,7 +551,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 							"sentAt":   sentAt,
 						})
 					}
-					
+
 					return dossiers, nil
 				},
 			},
@@ -625,7 +625,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 	// ========================================================================
 	// MUTATION OPERATIONS
 	// ========================================================================
-	
+
 	// Define the root mutation with all state-changing operations.
 	//
 	// Mutation operations modify data and trigger side effects:
@@ -674,7 +674,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 				//   - Automated deliveries will start based on frequency and delivery_time
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					input := p.Args["input"].(map[string]interface{})
-					
+
 					title := input["title"].(string)
 					email := input["email"].(string)
 					feedUrls := input["feedUrls"].([]interface{})
@@ -682,18 +682,18 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 					frequency := input["frequency"].(string)
 					deliveryTime := input["deliveryTime"].(string)
 					timezone := input["timezone"].(string)
-					
+
 					// Handle optional fields with defaults
 					tone := "professional"
 					if input["tone"] != nil {
 						tone = input["tone"].(string)
 					}
-					
+
 					language := "English"
 					if input["language"] != nil {
 						language = input["language"].(string)
 					}
-					
+
 					specialInstructions := ""
 					if input["specialInstructions"] != nil {
 						specialInstructions = input["specialInstructions"].(string)
@@ -713,12 +713,12 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 						RETURNING id, title, email, feed_urls, article_count, frequency, 
 							delivery_time, timezone, tone, language, special_instructions, 
 							active, created_at
-					`, title, email, pq.Array(feedURLStrings), articleCount, frequency, deliveryTime, 
+					`, title, email, pq.Array(feedURLStrings), articleCount, frequency, deliveryTime,
 						timezone, tone, language, specialInstructions).Scan(
-							&config.ID, &config.Title, &config.Email, pq.Array(&config.FeedURLs), 
-							&config.ArticleCount, &config.Frequency, &config.DeliveryTime, 
-							&config.Timezone, &config.Tone, &config.Language, 
-							&config.SpecialInstructions, &config.Active, &config.CreatedAt)
+						&config.ID, &config.Title, &config.Email, pq.Array(&config.FeedURLs),
+						&config.ArticleCount, &config.Frequency, &config.DeliveryTime,
+						&config.Timezone, &config.Tone, &config.Language,
+						&config.SpecialInstructions, &config.Active, &config.CreatedAt)
 					if err != nil {
 						return nil, err
 					}
@@ -758,7 +758,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					id := p.Args["id"].(string)
 					input := p.Args["input"].(map[string]interface{})
-					
+
 					title := input["title"].(string)
 					email := input["email"].(string)
 					feedUrls := input["feedUrls"].([]interface{})
@@ -766,23 +766,23 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 					frequency := input["frequency"].(string)
 					deliveryTime := input["deliveryTime"].(string)
 					timezone := input["timezone"].(string)
-					
+
 					// Handle optional fields with defaults
 					tone := "professional"
 					if input["tone"] != nil {
 						tone = input["tone"].(string)
 					}
-					
+
 					language := "English"
 					if input["language"] != nil {
 						language = input["language"].(string)
 					}
-					
+
 					specialInstructions := ""
 					if input["specialInstructions"] != nil {
 						specialInstructions = input["specialInstructions"].(string)
 					}
-					
+
 					// Convert feedUrls from []interface{} to []string
 					feedURLStrings := make([]string, len(feedUrls))
 					for i, url := range feedUrls {
@@ -799,12 +799,12 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 						RETURNING id, title, email, feed_urls, article_count, frequency, 
 							delivery_time::text, timezone, tone, language, special_instructions, 
 							active, created_at
-					`, id, title, email, pq.Array(feedURLStrings), articleCount, frequency, deliveryTime, 
+					`, id, title, email, pq.Array(feedURLStrings), articleCount, frequency, deliveryTime,
 						timezone, tone, language, specialInstructions).Scan(
 
-						&config.ID, &config.Title, &config.Email, pq.Array(&config.FeedURLs), 
-						&config.ArticleCount, &config.Frequency, &config.DeliveryTime, 
-						&config.Timezone, &config.Tone, &config.Language, 
+						&config.ID, &config.Title, &config.Email, pq.Array(&config.FeedURLs),
+						&config.ArticleCount, &config.Frequency, &config.DeliveryTime,
+						&config.Timezone, &config.Tone, &config.Language,
 						&config.SpecialInstructions, &config.Active, &config.CreatedAt)
 					if err != nil {
 						return nil, err
@@ -838,7 +838,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 				// Warning: This is a hard delete, not soft delete. Cannot be undone.
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					id := p.Args["id"].(string)
-					
+
 					_, err := db.ExecContext(p.Context, "DELETE FROM dossier_configs WHERE id = $1", id)
 					if err != nil {
 						return false, err
@@ -883,7 +883,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 				//   - Debugging delivery issues
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					configId := p.Args["configId"].(string)
-					
+
 					// Get dossier config
 					var config models.DossierConfig
 					err := db.QueryRowContext(p.Context, `
@@ -972,7 +972,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 				// Note: Does not record delivery in dossier_deliveries table.
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					configId := p.Args["configId"].(string)
-					
+
 					// Get dossier config
 					var config models.DossierConfig
 					err := db.QueryRowContext(p.Context, `
@@ -1021,7 +1021,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 					// Modify config title to indicate test email
 					testConfig := config
 					testConfig.Title = config.Title + " - Test Email"
-					
+
 					// Create sample articles for email template rendering
 					sampleArticles := []models.Article{
 						{
@@ -1030,23 +1030,23 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 							Link:        "https://example.com/article1",
 							Description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
 							Author:      "Test Author",
-							PublishedAt: time.Now().Format("2006-01-02 15:04:05"),
+							PublishedAt: time.Now(),
 						},
 						{
 							ID:          2,
-							Title:       "Market Update: Economic Trends Show Growth", 
+							Title:       "Market Update: Economic Trends Show Growth",
 							Link:        "https://example.com/article2",
 							Description: "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
 							Author:      "Test Reporter",
-							PublishedAt: time.Now().Add(-1*time.Hour).Format("2006-01-02 15:04:05"),
+							PublishedAt: time.Now().Add(-1 * time.Hour),
 						},
 						{
 							ID:          3,
 							Title:       "Innovation Spotlight: New Developments",
-							Link:        "https://example.com/article3", 
+							Link:        "https://example.com/article3",
 							Description: "Ut enim ad minim veniam, quis nostrud exercitation ullamco.",
 							Author:      "Tech Writer",
-							PublishedAt: time.Now().Add(-2*time.Hour).Format("2006-01-02 15:04:05"),
+							PublishedAt: time.Now().Add(-2 * time.Hour),
 						},
 					}
 
@@ -1115,7 +1115,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					input := p.Args["input"].(map[string]interface{})
 					var tone models.Tone
-					
+
 					err := db.QueryRowContext(p.Context, `
 						INSERT INTO tones (name, prompt) 
 						VALUES ($1, $2) 
@@ -1158,7 +1158,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 					id := p.Args["id"].(int)
 					input := p.Args["input"].(map[string]interface{})
 					var tone models.Tone
-					
+
 					err := db.QueryRowContext(p.Context, `
 						UPDATE tones 
 						SET name = $1, prompt = $2, updated_at = CURRENT_TIMESTAMP 
@@ -1199,19 +1199,19 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 				// before deletion to avoid reference errors.
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					id := p.Args["id"].(int)
-					
+
 					result, err := db.ExecContext(p.Context, `
 						DELETE FROM tones WHERE id = $1 AND is_system_default = false
 					`, id)
 					if err != nil {
 						return false, err
 					}
-					
+
 					rowsAffected, err := result.RowsAffected()
 					if err != nil {
 						return false, err
 					}
-					
+
 					return rowsAffected > 0, nil
 				},
 			},
@@ -1221,7 +1221,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 	// ========================================================================
 	// SCHEMA CREATION
 	// ========================================================================
-	
+
 	// Create GraphQL schema with query and mutation roots.
 	//
 	// The schema defines the complete GraphQL API contract including:
@@ -1242,7 +1242,7 @@ func Handler(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailSe
 	// ========================================================================
 	// HTTP HANDLER CONFIGURATION
 	// ========================================================================
-	
+
 	// Create GraphQL HTTP handler with development-friendly settings.
 	//
 	// Configuration:

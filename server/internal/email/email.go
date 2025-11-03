@@ -33,12 +33,12 @@ import (
 // Config holds SMTP server configuration for email delivery.
 // All fields are populated from environment variables with sensible defaults.
 type Config struct {
-	SMTPHost     string // SMTP server hostname (e.g., "smtp.gmail.com")
-	SMTPPort     string // SMTP server port ("587" for STARTTLS, "465" for direct TLS)
-	Username     string // SMTP authentication username (usually email address)
-	Password     string // SMTP authentication password or app-specific password
-	FromEmail    string // Sender email address
-	FromName     string // Display name for sender
+	SMTPHost  string // SMTP server hostname (e.g., "smtp.gmail.com")
+	SMTPPort  string // SMTP server port ("587" for STARTTLS, "465" for direct TLS)
+	Username  string // SMTP authentication username (usually email address)
+	Password  string // SMTP authentication password or app-specific password
+	FromEmail string // Sender email address
+	FromName  string // Display name for sender
 }
 
 // Service handles all email operations including template rendering and SMTP delivery.
@@ -59,14 +59,14 @@ type DossierEmail struct {
 // DossierData contains structured information for rendering dossier email templates.
 // Used by both HTML and text templates to generate consistent content.
 type DossierData struct {
-	Title           string        // Dossier configuration title
-	Summary         string        // AI-generated summary (HTML format)
-	Articles        []ArticleData // List of articles included in dossier
-	GeneratedAt     time.Time     // When the dossier was generated
-	ArticleCount    int           // Number of articles included
-	Tone            string        // AI tone used for summary
-	Language        string        // Language of the summary
-	Instructions    string        // Special instructions applied (if any)
+	Title        string        // Dossier configuration title
+	Summary      string        // AI-generated summary (HTML format)
+	Articles     []ArticleData // List of articles included in dossier
+	GeneratedAt  time.Time     // When the dossier was generated
+	ArticleCount int           // Number of articles included
+	Tone         string        // AI tone used for summary
+	Language     string        // Language of the summary
+	Instructions string        // Special instructions applied (if any)
 }
 
 // ArticleData represents a single article in the email template.
@@ -102,8 +102,9 @@ type ArticleData struct {
 //   - *Service: Configured email service ready for use
 //
 // Example:
-//   emailService := NewService()
-//   err := emailService.SendDossier(config, summary, articles)
+//
+//	emailService := NewService()
+//	err := emailService.SendDossier(config, summary, articles)
 func NewService() *Service {
 	config := Config{
 		SMTPHost:  getEnvOrDefault("SMTP_HOST", "localhost"),
@@ -140,12 +141,12 @@ func getEnvOrDefault(key, defaultValue string) string {
 // This is the main entry point for email delivery operations.
 //
 // Process Flow:
-//   1. Transform articles into email-friendly data structures
-//   2. Extract domain names from URLs for source attribution
-//   3. Compile dossier data with metadata
-//   4. Generate HTML and plain text versions via templates
-//   5. Build MIME multi-part message
-//   6. Send via SMTP with TLS encryption
+//  1. Transform articles into email-friendly data structures
+//  2. Extract domain names from URLs for source attribution
+//  3. Compile dossier data with metadata
+//  4. Generate HTML and plain text versions via templates
+//  5. Build MIME multi-part message
+//  6. Send via SMTP with TLS encryption
 //
 // The resulting email includes:
 //   - Styled HTML version with responsive design
@@ -163,10 +164,11 @@ func getEnvOrDefault(key, defaultValue string) string {
 //   - error: Template rendering or SMTP delivery failure
 //
 // Example:
-//   err := emailService.SendDossier(dossierConfig, aiSummary, articles)
-//   if err != nil {
-//       log.Printf("Failed to send dossier: %v", err)
-//   }
+//
+//	err := emailService.SendDossier(dossierConfig, aiSummary, articles)
+//	if err != nil {
+//	    log.Printf("Failed to send dossier: %v", err)
+//	}
 func (s *Service) SendDossier(config *models.DossierConfig, summary string, articles []models.Article) error {
 	log.Printf("Preparing to send dossier email: %s to %s", config.Title, config.Email)
 
@@ -184,14 +186,14 @@ func (s *Service) SendDossier(config *models.DossierConfig, summary string, arti
 
 	// Compile dossier data for template rendering
 	dossierData := DossierData{
-		Title:           config.Title,
-		Summary:         summary,
-		Articles:        articleData,
-		GeneratedAt:     time.Now(),
-		ArticleCount:    len(articles),
-		Tone:            config.Tone,
-		Language:        config.Language,
-		Instructions:    config.SpecialInstructions,
+		Title:        config.Title,
+		Summary:      summary,
+		Articles:     articleData,
+		GeneratedAt:  time.Now(),
+		ArticleCount: len(articles),
+		Tone:         config.Tone,
+		Language:     config.Language,
+		Instructions: config.SpecialInstructions,
 	}
 
 	// Generate HTML and text email content
@@ -222,21 +224,22 @@ func (s *Service) SendDossier(config *models.DossierConfig, summary string, arti
 //   - Other ports: Attempt STARTTLS as fallback
 //
 // Validation Steps:
-//   1. Connect to SMTP server
-//   2. Establish TLS encryption
-//   3. Authenticate with credentials
-//   4. Close connection
+//  1. Connect to SMTP server
+//  2. Establish TLS encryption
+//  3. Authenticate with credentials
+//  4. Close connection
 //
 // Returns:
 //   - error: Connection, TLS, or authentication failure
 //
 // Example:
-//   if err := emailService.TestSMTPConnection(); err != nil {
-//       log.Fatal("SMTP configuration invalid:", err)
-//   }
+//
+//	if err := emailService.TestSMTPConnection(); err != nil {
+//	    log.Fatal("SMTP configuration invalid:", err)
+//	}
 func (s *Service) TestSMTPConnection() error {
 	log.Printf("Testing SMTP connection to %s:%s", s.config.SMTPHost, s.config.SMTPPort)
-	
+
 	addr := s.config.SMTPHost + ":" + s.config.SMTPPort
 	auth := smtp.PlainAuth("", s.config.Username, s.config.Password, s.config.SMTPHost)
 
@@ -479,10 +482,10 @@ Delivered from your personal news automation system
 // sendEmail orchestrates the complete email sending process.
 //
 // Steps:
-//   1. Build MIME multi-part message (HTML + text)
-//   2. Select appropriate TLS method (STARTTLS or direct)
-//   3. Authenticate with SMTP server
-//   4. Transmit message
+//  1. Build MIME multi-part message (HTML + text)
+//  2. Select appropriate TLS method (STARTTLS or direct)
+//  3. Authenticate with SMTP server
+//  4. Transmit message
 //
 // Parameters:
 //   - email: Complete email with HTML and text bodies
@@ -541,8 +544,8 @@ Content-Transfer-Encoding: 7bit
 %s
 
 --%s--
-`, s.config.FromName, s.config.FromEmail, email.To, email.Subject, 
-	boundary, boundary, email.TextBody, boundary, email.HTMLBody, boundary)
+`, s.config.FromName, s.config.FromEmail, email.To, email.Subject,
+		boundary, boundary, email.TextBody, boundary, email.HTMLBody, boundary)
 
 	return message
 }
@@ -579,12 +582,12 @@ func (s *Service) sendSMTPWithTLS(from string, to []string, msg []byte) error {
 // This is the modern standard for secure SMTP on port 587.
 //
 // STARTTLS Protocol Flow:
-//   1. Connect to SMTP server over plain TCP
-//   2. Issue EHLO command to discover capabilities
-//   3. Send STARTTLS command to upgrade connection
-//   4. Perform TLS handshake
-//   5. Authenticate over encrypted connection
-//   6. Send email data
+//  1. Connect to SMTP server over plain TCP
+//  2. Issue EHLO command to discover capabilities
+//  3. Send STARTTLS command to upgrade connection
+//  4. Perform TLS handshake
+//  5. Authenticate over encrypted connection
+//  6. Send email data
 //
 // Security Features:
 //   - Certificate validation (InsecureSkipVerify: false)
@@ -632,11 +635,11 @@ func (s *Service) sendWithSTARTTLS(from string, to []string, msg []byte, auth sm
 // This is the traditional secure SMTP on port 465.
 //
 // Direct TLS Protocol Flow:
-//   1. Establish TLS connection immediately
-//   2. Perform TLS handshake before any SMTP commands
-//   3. Create SMTP client over TLS connection
-//   4. Authenticate over encrypted connection
-//   5. Send email data
+//  1. Establish TLS connection immediately
+//  2. Perform TLS handshake before any SMTP commands
+//  3. Create SMTP client over TLS connection
+//  4. Authenticate over encrypted connection
+//  5. Send email data
 //
 // Differences from STARTTLS:
 //   - TLS from connection start (no plaintext phase)
@@ -698,7 +701,7 @@ func (s *Service) sendWithDirectTLS(from string, to []string, msg []byte, auth s
 //   - error: Connection, TLS, or authentication failure
 func (s *Service) testWithSTARTTLS(auth smtp.Auth, addr string) error {
 	log.Printf("Testing SMTP connection with STARTTLS")
-	
+
 	client, err := smtp.Dial(addr)
 	if err != nil {
 		return fmt.Errorf("failed to connect to SMTP server: %w", err)
@@ -733,7 +736,7 @@ func (s *Service) testWithSTARTTLS(auth smtp.Auth, addr string) error {
 //   - error: Connection, TLS, or authentication failure
 func (s *Service) testWithDirectTLS(auth smtp.Auth, addr string) error {
 	log.Printf("Testing SMTP connection with direct TLS")
-	
+
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: false,
 		ServerName:         s.config.SMTPHost,
@@ -767,10 +770,10 @@ func (s *Service) testWithDirectTLS(auth smtp.Auth, addr string) error {
 // This implements the core SMTP commands for email delivery.
 //
 // SMTP Protocol Sequence:
-//   1. MAIL FROM: Specify sender
-//   2. RCPT TO: Specify each recipient (can be multiple)
-//   3. DATA: Send message content
-//   4. Quit: Close connection gracefully
+//  1. MAIL FROM: Specify sender
+//  2. RCPT TO: Specify each recipient (can be multiple)
+//  3. DATA: Send message content
+//  4. Quit: Close connection gracefully
 //
 // Error Handling:
 //   - Validates each step before proceeding
@@ -820,9 +823,9 @@ func (s *Service) sendMessage(client *smtp.Client, from string, to []string, msg
 // This provides user-friendly source attribution in emails.
 //
 // Processing Steps:
-//   1. Remove protocol (http:// or https://)
-//   2. Extract hostname (everything before first /)
-//   3. Remove www. prefix if present
+//  1. Remove protocol (http:// or https://)
+//  2. Extract hostname (everything before first /)
+//  3. Remove www. prefix if present
 //
 // Examples:
 //   - "https://www.example.com/article" → "example.com"
@@ -841,7 +844,7 @@ func extractDomain(url string) string {
 	} else if strings.HasPrefix(url, "https://") {
 		url = url[8:]
 	}
-	
+
 	// Extract hostname
 	parts := strings.Split(url, "/")
 	if len(parts) > 0 {

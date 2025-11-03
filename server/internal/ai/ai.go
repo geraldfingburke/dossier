@@ -1,4 +1,4 @@
-﻿// Package ai provides AI-powered content summarization and processing services
+// Package ai provides AI-powered content summarization and processing services
 // using local Ollama LLM models. This package handles the entire article
 // summarization pipeline including intelligent article selection, content
 // extraction, and tone-based summary generation.
@@ -36,10 +36,10 @@ type Service struct {
 // OllamaRequest represents the request payload sent to Ollama's API.
 // The stream field should be set to false for synchronous responses.
 type OllamaRequest struct {
-	Model  string `json:"model"`             // Model name (e.g., "llama3.2:3b")
-	Prompt string `json:"prompt"`            // The prompt text to send to the model
-	System string `json:"system,omitempty"`  // Optional system message for context
-	Stream bool   `json:"stream"`            // Whether to stream the response
+	Model  string `json:"model"`            // Model name (e.g., "llama3.2:3b")
+	Prompt string `json:"prompt"`           // The prompt text to send to the model
+	System string `json:"system,omitempty"` // Optional system message for context
+	Stream bool   `json:"stream"`           // Whether to stream the response
 }
 
 // OllamaResponse represents the response from Ollama's API.
@@ -52,25 +52,25 @@ type OllamaResponse struct {
 const (
 	// defaultOllamaURL is the fallback URL if OLLAMA_URL env var is not set
 	defaultOllamaURL = "http://localhost:11434"
-	
+
 	// defaultModel is the primary LLM model used for most operations
 	defaultModel = "llama3.2:3b"
-	
+
 	// uncensoredModel is used for tones requiring unrestricted language
 	uncensoredModel = "dolphin-mistral:latest"
-	
+
 	// maxArticlesForSelection is the threshold above which article selection occurs
 	maxArticlesForSelection = 10
-	
+
 	// targetArticleCount is the number of articles to select when > maxArticlesForSelection
 	targetArticleCount = 10
-	
+
 	// maxDescriptionLength limits preview text in article selection
 	maxDescriptionLength = 150
-	
+
 	// defaultTimeout is the standard timeout for Ollama API calls
 	defaultTimeout = 5 * time.Minute
-	
+
 	// preprocessingTimeout is an extended timeout for multi-stage operations
 	preprocessingTimeout = 10 * time.Minute
 )
@@ -133,9 +133,9 @@ func NewService(db *sql.DB) *Service {
 //   - string: HTML-formatted summary ready for email delivery
 //   - error: Any error encountered during the pipeline
 func (s *Service) GenerateSummary(ctx context.Context, articles []models.Article, tone, language, specialInstructions string) (string, error) {
-	log.Printf("Starting 3-stage preprocessing pipeline for %d articles (tone: %s, language: %s)", 
+	log.Printf("Starting 3-stage preprocessing pipeline for %d articles (tone: %s, language: %s)",
 		len(articles), tone, language)
-	
+
 	// Stage 1: Intelligent article selection
 	selectedArticles, err := s.selectArticles(ctx, articles)
 	if err != nil {
@@ -143,12 +143,12 @@ func (s *Service) GenerateSummary(ctx context.Context, articles []models.Article
 		selectedArticles = articles
 	}
 	log.Printf("Selected %d articles from %d total", len(selectedArticles), len(articles))
-	
+
 	// Stage 2: Clean and extract factual content from each selected article
 	cleanedArticles := make([]models.Article, 0, len(selectedArticles))
 	for i, article := range selectedArticles {
 		log.Printf("Preprocessing article %d/%d: %s", i+1, len(selectedArticles), article.Title)
-		
+
 		cleanContent, err := s.extractFactualContent(ctx, article)
 		if err != nil {
 			log.Printf("Failed to clean article %s: %v", article.Title, err)
@@ -158,16 +158,16 @@ func (s *Service) GenerateSummary(ctx context.Context, articles []models.Article
 				cleanContent = article.Content
 			}
 		}
-		
+
 		// Create cleaned version of article
 		cleanedArticle := article
 		cleanedArticle.Description = cleanContent
 		cleanedArticle.Content = cleanContent
 		cleanedArticles = append(cleanedArticles, cleanedArticle)
 	}
-	
+
 	log.Printf("Completed preprocessing, generating final summary with cleaned data")
-	
+
 	// Stage 3: Generate summary using cleaned articles
 	return s.generateSummaryFromCleanedArticles(ctx, cleanedArticles, tone, language, specialInstructions)
 }
@@ -206,7 +206,7 @@ func (s *Service) SummarizeArticle(ctx context.Context, article models.Article) 
 		content = article.Description
 	}
 
-	prompt := fmt.Sprintf("Please provide a concise summary of this article:\n\nTitle: %s\n\n%s", 
+	prompt := fmt.Sprintf("Please provide a concise summary of this article:\n\nTitle: %s\n\n%s",
 		article.Title, content)
 
 	reqBody := OllamaRequest{
@@ -231,8 +231,8 @@ func (s *Service) SummarizeArticle(ctx context.Context, article models.Article) 
 // of articles when the total exceeds the optimal processing threshold.
 //
 // Algorithm:
-//   1. If ≤ 10 articles: Return all (no selection needed)
-//   2. If > 10 articles: Use AI to select exactly 10 most important/diverse articles
+//  1. If ≤ 10 articles: Return all (no selection needed)
+//  2. If > 10 articles: Use AI to select exactly 10 most important/diverse articles
 //
 // Selection Criteria (AI-evaluated):
 //   - Topic diversity (avoid redundant coverage)
@@ -255,15 +255,15 @@ func (s *Service) selectArticles(ctx context.Context, articles []models.Article)
 	if len(articles) <= maxArticlesForSelection {
 		return articles, nil
 	}
-	
+
 	// Build selection prompt with article previews
 	var selectionPrompt strings.Builder
 	selectionPrompt.WriteString("You are a news editor selecting articles for a digest. ")
-	selectionPrompt.WriteString(fmt.Sprintf("From the following %d articles, select exactly %d ", 
+	selectionPrompt.WriteString(fmt.Sprintf("From the following %d articles, select exactly %d ",
 		len(articles), targetArticleCount))
 	selectionPrompt.WriteString("that are most important and cover diverse topics.\n\n")
 	selectionPrompt.WriteString("Return ONLY comma-separated numbers (e.g., 1,3,7,12). No explanations.\n\n")
-	
+
 	for i, article := range articles {
 		selectionPrompt.WriteString(fmt.Sprintf("%d. %s\n", i+1, article.Title))
 		if article.Description != "" {
@@ -275,24 +275,24 @@ func (s *Service) selectArticles(ctx context.Context, articles []models.Article)
 		}
 		selectionPrompt.WriteString("\n")
 	}
-	
+
 	reqBody := OllamaRequest{
 		Model:  defaultModel,
 		Prompt: selectionPrompt.String(),
 		Stream: false,
 	}
-	
+
 	response, err := s.callOllama(ctx, reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("article selection AI call failed: %w", err)
 	}
-	
+
 	// Parse AI response to extract article indices
 	selectedIndices := parseIndices(response)
 	if len(selectedIndices) == 0 {
 		return nil, fmt.Errorf("no valid article indices returned by AI")
 	}
-	
+
 	// Build selected articles list (convert 1-based to 0-based indexing)
 	var selectedArticles []models.Article
 	for _, idx := range selectedIndices {
@@ -300,7 +300,7 @@ func (s *Service) selectArticles(ctx context.Context, articles []models.Article)
 			selectedArticles = append(selectedArticles, articles[idx-1])
 		}
 	}
-	
+
 	log.Printf("AI selected articles: %v (from %d total)", selectedIndices, len(articles))
 	return selectedArticles, nil
 }
@@ -336,11 +336,11 @@ func (s *Service) extractFactualContent(ctx context.Context, article models.Arti
 	if sourceText == "" {
 		sourceText = article.Content
 	}
-	
+
 	if sourceText == "" {
 		return article.Title, nil
 	}
-	
+
 	prompt := fmt.Sprintf(`Extract the key factual information from this article into 2-3 plain text sentences. 
 Remove all HTML, formatting, opinions, speculation, and marketing language. 
 Focus only on concrete facts, events, and data.
@@ -349,24 +349,24 @@ Title: %s
 
 Content: %s
 
-Return only 2-3 factual sentences with no HTML, no opinions, no speculation:`, 
+Return only 2-3 factual sentences with no HTML, no opinions, no speculation:`,
 		article.Title, sourceText)
-	
+
 	reqBody := OllamaRequest{
 		Model:  defaultModel,
 		Prompt: prompt,
 		Stream: false,
 	}
-	
+
 	response, err := s.callOllama(ctx, reqBody)
 	if err != nil {
 		return "", fmt.Errorf("content extraction AI call failed: %w", err)
 	}
-	
+
 	// Additional cleanup: strip any remaining HTML tags
 	cleanResponse := strings.TrimSpace(response)
 	cleanResponse = regexp.MustCompile(`<[^>]*>`).ReplaceAllString(cleanResponse, "")
-	
+
 	return cleanResponse, nil
 }
 
@@ -383,16 +383,16 @@ Return only 2-3 factual sentences with no HTML, no opinions, no speculation:`,
 //   - Tone must exist in database (fallback to professional if not found)
 //
 // Summary Generation Process:
-//   1. Retrieve tone prompt from database
-//   2. Build comprehensive AI prompt with:
-//      - Tone instructions
-//      - Language specification
-//      - Special user instructions
-//      - HTML formatting requirements
-//      - Cleaned article facts
-//   3. Select appropriate model (uncensored for "sweary" tone)
-//   4. Generate summary via Ollama
-//   5. Clean up response formatting
+//  1. Retrieve tone prompt from database
+//  2. Build comprehensive AI prompt with:
+//     - Tone instructions
+//     - Language specification
+//     - Special user instructions
+//     - HTML formatting requirements
+//     - Cleaned article facts
+//  3. Select appropriate model (uncensored for "sweary" tone)
+//  4. Generate summary via Ollama
+//  5. Clean up response formatting
 //
 // Special Handling:
 //   - "sweary" tone: Uses uncensored model (dolphin-mistral) with permissive system message
@@ -479,10 +479,10 @@ func (s *Service) generateSummaryFromCleanedArticles(ctx context.Context, articl
 	}
 
 	log.Printf("Successfully generated summary from cleaned articles")
-	
+
 	// Clean up excessive newlines
 	cleanResponse := regexp.MustCompile(`\n{3,}`).ReplaceAllString(response, "\n\n")
-	
+
 	return strings.TrimSpace(cleanResponse), nil
 }
 
@@ -508,7 +508,7 @@ func (s *Service) getTonePrompt(ctx context.Context, toneName string) (string, e
 	err := s.db.QueryRowContext(ctx, `
 		SELECT prompt FROM tones WHERE name = $1
 	`, toneName).Scan(&prompt)
-	
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Printf("Tone '%s' not found in database, using professional fallback", toneName)
@@ -516,7 +516,7 @@ func (s *Service) getTonePrompt(ctx context.Context, toneName string) (string, e
 		}
 		return "", fmt.Errorf("failed to query tone prompt: %w", err)
 	}
-	
+
 	return prompt, nil
 }
 
@@ -637,10 +637,10 @@ func (s *Service) callOllamaWithTimeout(ctx context.Context, reqBody OllamaReque
 // Output: [1, 3, 7, 12, 15]
 //
 // Algorithm:
-//   1. Remove all non-digit, non-comma, non-space characters
-//   2. Split on commas
-//   3. Parse each part as integer
-//   4. Filter out invalid/zero values
+//  1. Remove all non-digit, non-comma, non-space characters
+//  2. Split on commas
+//  3. Parse each part as integer
+//  4. Filter out invalid/zero values
 //
 // Parameters:
 //   - response: Raw AI response text
@@ -650,10 +650,10 @@ func (s *Service) callOllamaWithTimeout(ctx context.Context, reqBody OllamaReque
 func parseIndices(response string) []int {
 	response = strings.TrimSpace(response)
 	response = regexp.MustCompile(`[^\d,\s]`).ReplaceAllString(response, "")
-	
+
 	parts := strings.Split(response, ",")
 	var indices []int
-	
+
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part != "" {
@@ -662,7 +662,7 @@ func parseIndices(response string) []int {
 			}
 		}
 	}
-	
+
 	return indices
 }
 

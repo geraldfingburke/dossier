@@ -16,7 +16,7 @@ RUN npm run build
 
 # Final stage
 FROM alpine:latest
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates tzdata
 WORKDIR /root/
 
 # Copy backend binary

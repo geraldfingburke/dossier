@@ -46,11 +46,12 @@ const (
 //   - error: Connection or ping failure
 //
 // Example:
-//   db, err := NewDB()
-//   if err != nil {
-//       log.Fatal("Database connection failed:", err)
-//   }
-//   defer db.Close()
+//
+//	db, err := NewDB()
+//	if err != nil {
+//	    log.Fatal("Database connection failed:", err)
+//	}
+//	defer db.Close()
 func NewDB() (*sql.DB, error) {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
@@ -102,10 +103,10 @@ func NewDB() (*sql.DB, error) {
 //   - 10 predefined AI tones (professional, humorous, apocalyptic, etc.)
 //
 // Migration Order:
-//   1. Drop legacy tables (old schema cleanup)
-//   2. Create tables in dependency order
-//   3. Create performance indexes
-//   4. Insert default tone configurations
+//  1. Drop legacy tables (old schema cleanup)
+//  2. Create tables in dependency order
+//  3. Create performance indexes
+//  4. Insert default tone configurations
 //
 // Parameters:
 //   - db: Active database connection
@@ -114,9 +115,10 @@ func NewDB() (*sql.DB, error) {
 //   - error: Any SQL execution error
 //
 // Example:
-//   if err := Migrate(db); err != nil {
-//       log.Fatal("Migration failed:", err)
-//   }
+//
+//	if err := Migrate(db); err != nil {
+//	    log.Fatal("Migration failed:", err)
+//	}
 func Migrate(db *sql.DB) error {
 	schema := `
 	-- ========================================================================

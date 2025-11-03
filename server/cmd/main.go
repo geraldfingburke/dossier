@@ -9,11 +9,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/geraldfingburke/dossier/server/internal/ai"
 	"github.com/geraldfingburke/dossier/server/internal/database"
+	"github.com/geraldfingburke/dossier/server/internal/email"
 	"github.com/geraldfingburke/dossier/server/internal/graphql"
 	"github.com/geraldfingburke/dossier/server/internal/rss"
-	"github.com/geraldfingburke/dossier/server/internal/ai"
-	"github.com/geraldfingburke/dossier/server/internal/email"
 	"github.com/geraldfingburke/dossier/server/internal/scheduler"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -38,10 +38,10 @@ func main() {
 	emailService := email.NewService()
 	rssService := rss.NewService(aiService)
 	schedulerService := scheduler.NewService(db, rssService, aiService, emailService)
-	
+
 	// Create router
 	r := chi.NewRouter()
-	
+
 	// Middleware
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -98,13 +98,13 @@ func main() {
 	<-quit
 
 	log.Println("Server shutting down...")
-	
+
 	// Stop the scheduler
 	schedulerService.Stop()
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	
+
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}

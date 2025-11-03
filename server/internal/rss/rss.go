@@ -103,8 +103,9 @@ type Service struct {
 //   - *Service: Configured RSS service ready for feed operations
 //
 // Example:
-//   rssService := rss.NewService(aiService)
-//   articles, err := rssService.FetchArticlesFromFeeds(ctx, feedURLs, 10)
+//
+//	rssService := rss.NewService(aiService)
+//	articles, err := rssService.FetchArticlesFromFeeds(ctx, feedURLs, 10)
 func NewService(aiService *ai.Service) *Service {
 	return &Service{
 		parser:    gofeed.NewParser(),
@@ -146,14 +147,15 @@ func NewService(aiService *ai.Service) *Service {
 //   - error: Network, HTTP, or parsing error
 //
 // Example:
-//   ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-//   defer cancel()
-//   feed, err := service.FetchFeed(ctx, "https://news.ycombinator.com/rss")
-//   if err != nil {
-//       log.Printf("Failed to fetch feed: %v", err)
-//       return
-//   }
-//   log.Printf("Fetched %d items from %s", len(feed.Items), feed.Title)
+//
+//	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+//	defer cancel()
+//	feed, err := service.FetchFeed(ctx, "https://news.ycombinator.com/rss")
+//	if err != nil {
+//	    log.Printf("Failed to fetch feed: %v", err)
+//	    return
+//	}
+//	log.Printf("Fetched %d items from %s", len(feed.Items), feed.Title)
 func (s *Service) FetchFeed(ctx context.Context, feedURL string) (*gofeed.Feed, error) {
 	feed, err := s.parser.ParseURLWithContext(feedURL, ctx)
 	if err != nil {
@@ -174,13 +176,13 @@ func (s *Service) FetchFeed(ctx context.Context, feedURL string) (*gofeed.Feed, 
 // don't prevent the entire operation from succeeding.
 //
 // Algorithm:
-//   1. Calculate articles per feed (maxArticles / number of feeds)
-//   2. Fetch each feed in sequence (continues on individual failures)
-//   3. Convert feed items to Article models
-//   4. Normalize missing/optional fields
-//   5. Aggregate all articles into single collection
-//   6. Sort by publication date (newest first)
-//   7. Limit to maxArticles total
+//  1. Calculate articles per feed (maxArticles / number of feeds)
+//  2. Fetch each feed in sequence (continues on individual failures)
+//  3. Convert feed items to Article models
+//  4. Normalize missing/optional fields
+//  5. Aggregate all articles into single collection
+//  6. Sort by publication date (newest first)
+//  7. Limit to maxArticles total
 //
 // Distribution Strategy:
 // Articles are distributed evenly across feeds, but if some feeds return
@@ -215,19 +217,20 @@ func (s *Service) FetchFeed(ctx context.Context, feedURL string) (*gofeed.Feed, 
 //   - error: Only if ALL feeds fail or critical error occurs
 //
 // Example:
-//   feedURLs := []string{
-//       "https://news.ycombinator.com/rss",
-//       "https://techcrunch.com/feed/",
-//   }
-//   articles, err := service.FetchArticlesFromFeeds(ctx, feedURLs, 20)
-//   if err != nil {
-//       log.Printf("Failed to fetch articles: %v", err)
-//       return
-//   }
-//   log.Printf("Fetched %d articles from %d feeds", len(articles), len(feedURLs))
+//
+//	feedURLs := []string{
+//	    "https://news.ycombinator.com/rss",
+//	    "https://techcrunch.com/feed/",
+//	}
+//	articles, err := service.FetchArticlesFromFeeds(ctx, feedURLs, 20)
+//	if err != nil {
+//	    log.Printf("Failed to fetch articles: %v", err)
+//	    return
+//	}
+//	log.Printf("Fetched %d articles from %d feeds", len(articles), len(feedURLs))
 func (s *Service) FetchArticlesFromFeeds(ctx context.Context, feedURLs []string, maxArticles int) ([]models.Article, error) {
 	var allArticles []models.Article
-	
+
 	// Calculate target articles per feed for even distribution
 	articlesPerFeed := maxArticles / len(feedURLs)
 	if articlesPerFeed == 0 {
@@ -237,7 +240,7 @@ func (s *Service) FetchArticlesFromFeeds(ctx context.Context, feedURLs []string,
 	// Fetch articles from each feed
 	for _, feedURL := range feedURLs {
 		log.Printf("Fetching articles from feed: %s", feedURL)
-		
+
 		// Fetch and parse feed
 		feed, err := s.FetchFeed(ctx, feedURL)
 		if err != nil {

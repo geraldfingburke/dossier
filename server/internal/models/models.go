@@ -7,10 +7,10 @@
 //
 // The models follow a relational design pattern with clear ownership and relationships:
 //
-//   1. Configuration Layer: DossierConfig (user's automation settings)
-//   2. Content Layer: Feed → Article (RSS sources and fetched content)
-//   3. Delivery Layer: DossierDelivery ↔ Article (historical deliveries)
-//   4. Customization Layer: Tone (AI tone presets)
+//  1. Configuration Layer: DossierConfig (user's automation settings)
+//  2. Content Layer: Feed → Article (RSS sources and fetched content)
+//  3. Delivery Layer: DossierDelivery ↔ Article (historical deliveries)
+//  4. Customization Layer: Tone (AI tone presets)
 //
 // # Database Mapping
 //
@@ -88,18 +88,19 @@ import (
 //   - Language: Defaults to "English" if not specified
 //
 // Example:
-//   config := models.DossierConfig{
-//       Title:        "Daily AI News",
-//       Email:        "user@example.com",
-//       FeedURLs:     []string{"https://news.ycombinator.com/rss"},
-//       ArticleCount: 10,
-//       Frequency:    "daily",
-//       DeliveryTime: "08:00:00",
-//       Timezone:     "America/New_York",
-//       Tone:         "professional",
-//       Language:     "English",
-//       Active:       true,
-//   }
+//
+//	config := models.DossierConfig{
+//	    Title:        "Daily AI News",
+//	    Email:        "user@example.com",
+//	    FeedURLs:     []string{"https://news.ycombinator.com/rss"},
+//	    ArticleCount: 10,
+//	    Frequency:    "daily",
+//	    DeliveryTime: "08:00:00",
+//	    Timezone:     "America/New_York",
+//	    Tone:         "professional",
+//	    Language:     "English",
+//	    Active:       true,
+//	}
 type DossierConfig struct {
 	ID                  int       `json:"id" db:"id"`
 	Title               string    `json:"title" db:"title"`
@@ -137,14 +138,16 @@ type DossierConfig struct {
 //   - Handles empty arrays correctly (returns "{}" instead of null)
 //
 // Example SQL:
-//   CREATE TABLE example (
-//       tags TEXT[]  -- PostgreSQL array column
-//   );
+//
+//	CREATE TABLE example (
+//	    tags TEXT[]  -- PostgreSQL array column
+//	);
 //
 // Example Go:
-//   type Model struct {
-//       Tags []string `db:"tags"`  -- Automatically converted via StringArray
-//   }
+//
+//	type Model struct {
+//	    Tags []string `db:"tags"`  -- Automatically converted via StringArray
+//	}
 type StringArray []string
 
 // Value implements the driver.Valuer interface for database storage.
@@ -208,13 +211,14 @@ func (a *StringArray) Scan(value interface{}) error {
 //   - Marked inactive if feed becomes unavailable
 //
 // Example:
-//   feed := models.Feed{
-//       URL:         "https://news.ycombinator.com/rss",
-//       Title:       "Hacker News",
-//       Description: "Links for the intellectually curious",
-//       Active:      true,
-//       LastFetched: time.Now(),
-//   }
+//
+//	feed := models.Feed{
+//	    URL:         "https://news.ycombinator.com/rss",
+//	    Title:       "Hacker News",
+//	    Description: "Links for the intellectually curious",
+//	    Active:      true,
+//	    LastFetched: time.Now(),
+//	}
 type Feed struct {
 	ID          int       `json:"id" db:"id"`
 	URL         string    `json:"url" db:"url"`
@@ -256,21 +260,22 @@ type Feed struct {
 //   - PublishedAt: Usually accurate, but may be missing or incorrect
 //
 // Usage in Pipeline:
-//   1. Fetched from RSS feeds by rss.Service
-//   2. Selected by AI for inclusion in summary
-//   3. Summarized by ai.Service
-//   4. Included in email by email.Service
-//   5. Linked to delivery via DeliveryArticle
+//  1. Fetched from RSS feeds by rss.Service
+//  2. Selected by AI for inclusion in summary
+//  3. Summarized by ai.Service
+//  4. Included in email by email.Service
+//  5. Linked to delivery via DeliveryArticle
 //
 // Example:
-//   article := models.Article{
-//       FeedID:      1,
-//       Title:       "Go 1.22 Released",
-//       Link:        "https://go.dev/blog/go1.22",
-//       Description: "The Go team is happy to announce...",
-//       Author:      "Go Team",
-//       PublishedAt: time.Now().Add(-2 * time.Hour),
-//   }
+//
+//	article := models.Article{
+//	    FeedID:      1,
+//	    Title:       "Go 1.22 Released",
+//	    Link:        "https://go.dev/blog/go1.22",
+//	    Description: "The Go team is happy to announce...",
+//	    Author:      "Go Team",
+//	    PublishedAt: time.Now().Add(-2 * time.Hour),
+//	}
 type Article struct {
 	ID          int       `json:"id" db:"id"`
 	FeedID      int       `json:"feed_id" db:"feed_id"`
@@ -304,9 +309,9 @@ type Article struct {
 //   - CreatedAt: Record creation timestamp
 //
 // Lifecycle:
-//   1. Created after successful dossier generation
-//   2. Updated if email delivery fails initially
-//   3. Never deleted (permanent audit trail)
+//  1. Created after successful dossier generation
+//  2. Updated if email delivery fails initially
+//  3. Never deleted (permanent audit trail)
 //
 // Query Patterns:
 //   - List deliveries for specific config: WHERE config_id = ?
@@ -314,13 +319,14 @@ type Article struct {
 //   - Failed deliveries: WHERE email_sent = false
 //
 // Example:
-//   delivery := models.DossierDelivery{
-//       ConfigID:     1,
-//       DeliveryDate: time.Now(),
-//       Summary:      "<h2>Today's Top Stories</h2>...",
-//       ArticleCount: 10,
-//       EmailSent:    true,
-//   }
+//
+//	delivery := models.DossierDelivery{
+//	    ConfigID:     1,
+//	    DeliveryDate: time.Now(),
+//	    Summary:      "<h2>Today's Top Stories</h2>...",
+//	    ArticleCount: 10,
+//	    EmailSent:    true,
+//	}
 type DossierDelivery struct {
 	ID           int       `json:"id" db:"id"`
 	ConfigID     int       `json:"config_id" db:"config_id"`
@@ -342,7 +348,7 @@ type DossierDelivery struct {
 // Database Structure:
 //   - Composite primary key: (delivery_id, article_id)
 //   - Foreign keys: delivery_id → dossier_deliveries.id
-//                   article_id → articles.id
+//     article_id → articles.id
 //
 // Usage:
 // This is typically managed automatically when recording deliveries and is
@@ -350,9 +356,10 @@ type DossierDelivery struct {
 // DossierDelivery is populated via SQL joins.
 //
 // Example SQL:
-//   SELECT a.* FROM articles a
-//   JOIN delivery_articles da ON a.id = da.article_id
-//   WHERE da.delivery_id = $1
+//
+//	SELECT a.* FROM articles a
+//	JOIN delivery_articles da ON a.id = da.article_id
+//	WHERE da.delivery_id = $1
 type DeliveryArticle struct {
 	DeliveryID int `json:"delivery_id" db:"delivery_id"`
 	ArticleID  int `json:"article_id" db:"article_id"`
@@ -401,11 +408,12 @@ type DeliveryArticle struct {
 //   - Experimental variations (e.g., "Sarcastic", "ELI5")
 //
 // Example:
-//   tone := models.Tone{
-//       Name:            "Executive Summary",
-//       Prompt:          "Present information as a brief executive summary...",
-//       IsSystemDefault: false,
-//   }
+//
+//	tone := models.Tone{
+//	    Name:            "Executive Summary",
+//	    Prompt:          "Present information as a brief executive summary...",
+//	    IsSystemDefault: false,
+//	}
 type Tone struct {
 	ID              int       `json:"id" db:"id"`
 	Name            string    `json:"name" db:"name"`

@@ -7,11 +7,11 @@
 // # Architecture
 //
 // The scheduler uses a ticker-based approach with 1-minute granularity:
-//   1. Ticker fires every minute
-//   2. Query active dossier configurations
-//   3. Check each configuration's schedule
-//   4. Generate and send dossiers asynchronously
-//   5. Record delivery history
+//  1. Ticker fires every minute
+//  2. Query active dossier configurations
+//  3. Check each configuration's schedule
+//  4. Generate and send dossiers asynchronously
+//  5. Record delivery history
 //
 // # Scheduling Logic
 //
@@ -58,10 +58,10 @@
 //
 // # Lifecycle
 //
-//   1. NewService(): Initialize with service dependencies
-//   2. Start(): Begin ticker loop in goroutine
-//   3. [Runtime]: Automatic dossier processing
-//   4. Stop(): Graceful shutdown, stop ticker
+//  1. NewService(): Initialize with service dependencies
+//  2. Start(): Begin ticker loop in goroutine
+//  3. [Runtime]: Automatic dossier processing
+//  4. Stop(): Graceful shutdown, stop ticker
 //
 // # Performance Characteristics
 //
@@ -72,10 +72,10 @@
 //
 // # Usage Example
 //
-//   scheduler := scheduler.NewService(db, rssService, aiService, emailService)
-//   scheduler.Start()
-//   defer scheduler.Stop()
-//   // Scheduler runs in background until Stop() is called
+//	scheduler := scheduler.NewService(db, rssService, aiService, emailService)
+//	scheduler.Start()
+//	defer scheduler.Stop()
+//	// Scheduler runs in background until Stop() is called
 package scheduler
 
 import (
@@ -147,9 +147,10 @@ type Service struct {
 //   - *Service: Configured scheduler service ready to start
 //
 // Example:
-//   scheduler := scheduler.NewService(db, rssService, aiService, emailService)
-//   scheduler.Start()
-//   defer scheduler.Stop()
+//
+//	scheduler := scheduler.NewService(db, rssService, aiService, emailService)
+//	scheduler.Start()
+//	defer scheduler.Stop()
 func NewService(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emailService *email.Service) *Service {
 	return &Service{
 		db:           db,
@@ -168,10 +169,10 @@ func NewService(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emai
 // Start begins the scheduler with 1-minute check intervals.
 //
 // This method starts a background goroutine that:
-//   1. Wakes up every minute via ticker
-//   2. Queries active dossier configurations
-//   3. Evaluates each configuration's schedule
-//   4. Triggers async dossier generation for due deliveries
+//  1. Wakes up every minute via ticker
+//  2. Queries active dossier configurations
+//  3. Evaluates each configuration's schedule
+//  4. Triggers async dossier generation for due deliveries
 //
 // Thread Safety:
 // Safe to call concurrently. If already running, logs and returns.
@@ -183,10 +184,11 @@ func NewService(db *sql.DB, rssService *rss.Service, aiService *ai.Service, emai
 //   - Logs: Startup confirmation and ticker events
 //
 // Example:
-//   scheduler.Start()
-//   // Scheduler runs in background
-//   time.Sleep(1 * time.Hour)
-//   scheduler.Stop()
+//
+//	scheduler.Start()
+//	// Scheduler runs in background
+//	time.Sleep(1 * time.Hour)
+//	scheduler.Stop()
 func (s *Service) Start() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -218,9 +220,9 @@ func (s *Service) Start() {
 // Stop gracefully stops the scheduler.
 //
 // This method:
-//   1. Stops the ticker (no more periodic checks)
-//   2. Signals the background goroutine to exit
-//   3. Updates running state
+//  1. Stops the ticker (no more periodic checks)
+//  2. Signals the background goroutine to exit
+//  3. Updates running state
 //
 // Thread Safety:
 // Safe to call concurrently. If not running, returns silently.
@@ -235,8 +237,9 @@ func (s *Service) Start() {
 // independently. Only the scheduler loop stops.
 //
 // Example:
-//   scheduler.Stop()
-//   // Scheduler stopped, but active deliveries may still complete
+//
+//	scheduler.Stop()
+//	// Scheduler stopped, but active deliveries may still complete
 func (s *Service) Stop() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -265,9 +268,10 @@ func (s *Service) Stop() {
 // in the schedulerStatus query.
 //
 // Example:
-//   if scheduler.IsRunning() {
-//       log.Println("Scheduler is active")
-//   }
+//
+//	if scheduler.IsRunning() {
+//	    log.Println("Scheduler is active")
+//	}
 func (s *Service) IsRunning() bool {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
@@ -281,9 +285,9 @@ func (s *Service) IsRunning() bool {
 // checkAndProcessDossiers checks for dossiers that need generation and processes them.
 //
 // This is the main scheduler loop body that runs every minute. It:
-//   1. Queries all active dossier configurations
-//   2. Evaluates each against current time and frequency
-//   3. Launches async goroutines for due dossiers
+//  1. Queries all active dossier configurations
+//  2. Evaluates each against current time and frequency
+//  3. Launches async goroutines for due dossiers
 //
 // Error Handling:
 // Individual configuration errors don't stop processing of others.
@@ -297,7 +301,7 @@ func (s *Service) IsRunning() bool {
 //   - Generation triggers and completion
 func (s *Service) checkAndProcessDossiers() {
 	log.Printf("Scheduler: Checking for dossiers to process at %s", time.Now().UTC().Format("15:04:05"))
-	
+
 	configs, err := s.getActiveDossierConfigs()
 	if err != nil {
 		log.Printf("Error getting active dossier configs: %v", err)
@@ -305,13 +309,13 @@ func (s *Service) checkAndProcessDossiers() {
 	}
 
 	log.Printf("Scheduler: Found %d active configurations", len(configs))
-	
+
 	for _, config := range configs {
 		log.Printf("Scheduler: Checking config %d (%s) - delivery_time: %s", config.ID, config.Title, config.DeliveryTime)
-		
+
 		if s.shouldGenerateDossier(config) {
 			log.Printf("Scheduler: Triggering dossier generation for config %d (%s)", config.ID, config.Title)
-			
+
 			// Launch async generation to avoid blocking other configs
 			go func(cfg models.DossierConfig) {
 				if err := s.generateAndSendDossier(cfg); err != nil {
@@ -376,12 +380,12 @@ func (s *Service) getActiveDossierConfigs() ([]models.DossierConfig, error) {
 // shouldGenerateDossier determines if a dossier should be generated now.
 //
 // This method implements the core scheduling logic:
-//   1. Parse configuration's timezone
-//   2. Get current time in that timezone
-//   3. Parse delivery time from configuration
-//   4. Check if current time matches delivery window
-//   5. Apply frequency-based rules (daily/weekly/monthly)
-//   6. Check duplicate prevention logic
+//  1. Parse configuration's timezone
+//  2. Get current time in that timezone
+//  3. Parse delivery time from configuration
+//  4. Check if current time matches delivery window
+//  5. Apply frequency-based rules (daily/weekly/monthly)
+//  6. Check duplicate prevention logic
 //
 // Time Matching:
 // Delivery occurs when current hour and minute match configured time.
@@ -412,14 +416,23 @@ func (s *Service) shouldGenerateDossier(config models.DossierConfig) bool {
 
 	// Get current time in configuration's timezone
 	now := time.Now().In(location)
-	
+	log.Printf("Scheduler: Current time in %s: %s", config.Timezone, now.Format("2006-01-02 15:04:05 MST"))
+
 	// Parse delivery time - handle multiple formats for robustness
 	var deliveryTime time.Time
-	
+
 	// Try HH:MM format first (most common)
 	if len(config.DeliveryTime) == 5 && config.DeliveryTime[2] == ':' {
 		var err error
 		deliveryTime, err = time.Parse("15:04", config.DeliveryTime)
+		if err != nil {
+			log.Printf("Invalid delivery time %s for config %d", config.DeliveryTime, config.ID)
+			return false
+		}
+	} else if len(config.DeliveryTime) == 8 && config.DeliveryTime[2] == ':' && config.DeliveryTime[5] == ':' {
+		// HH:MM:SS format (PostgreSQL TIME type)
+		var err error
+		deliveryTime, err = time.Parse("15:04:05", config.DeliveryTime)
 		if err != nil {
 			log.Printf("Invalid delivery time %s for config %d", config.DeliveryTime, config.ID)
 			return false
@@ -431,23 +444,26 @@ func (s *Service) shouldGenerateDossier(config models.DossierConfig) bool {
 			// Try PostgreSQL TIME format with zero date
 			fullTime, parseErr = time.Parse("0000-01-01T15:04:05Z", config.DeliveryTime)
 			if parseErr != nil {
-				// Try HH:MM:SS format
-				fullTime, parseErr = time.Parse("15:04:05", config.DeliveryTime)
+				log.Printf("Invalid delivery time format %s for config %d - %v", config.DeliveryTime, config.ID, parseErr)
+				return false
 			}
-		}
-		if parseErr != nil {
-			log.Printf("Invalid delivery time format %s for config %d - %v", config.DeliveryTime, config.ID, parseErr)
-			return false
 		}
 		deliveryTime = fullTime
 	}
 
 	// Create target time for today in the configuration's timezone
+	// The deliveryTime parsed above is timezone-naive (just hours and minutes)
+	// We need to create a specific time today in the user's timezone
 	targetTime := time.Date(
 		now.Year(), now.Month(), now.Day(),
 		deliveryTime.Hour(), deliveryTime.Minute(), 0, 0,
 		location,
 	)
+
+	log.Printf("Scheduler: Target delivery time for config %d: %s (hour=%d, minute=%d)", 
+		config.ID, targetTime.Format("2006-01-02 15:04:05 MST"), targetTime.Hour(), targetTime.Minute())
+	log.Printf("Scheduler: Current time hour=%d, minute=%d; Target hour=%d, minute=%d", 
+		now.Hour(), now.Minute(), targetTime.Hour(), targetTime.Minute())
 
 	// Check if we're within the delivery window (current minute matches target minute)
 	if now.Hour() != targetTime.Hour() || now.Minute() != targetTime.Minute() {
@@ -496,7 +512,7 @@ func (s *Service) shouldGenerateDaily(config models.DossierConfig, now time.Time
 	// Compare dates only (ignore time)
 	lastGeneratedDay := lastGenerated.In(now.Location()).Format("2006-01-02")
 	todayDay := now.Format("2006-01-02")
-	
+
 	return lastGeneratedDay != todayDay
 }
 
@@ -533,7 +549,7 @@ func (s *Service) shouldGenerateWeekly(config models.DossierConfig, now time.Tim
 	// Compare ISO week numbers
 	_, thisWeek := now.ISOWeek()
 	_, lastWeek := lastGenerated.In(now.Location()).ISOWeek()
-	
+
 	return thisWeek != lastWeek
 }
 
@@ -570,7 +586,7 @@ func (s *Service) shouldGenerateMonthly(config models.DossierConfig, now time.Ti
 	// Compare year-month only
 	thisMonth := now.Format("2006-01")
 	lastMonth := lastGenerated.In(now.Location()).Format("2006-01")
-	
+
 	return thisMonth != lastMonth
 }
 
@@ -593,14 +609,14 @@ func (s *Service) getLastGeneratedTime(configID int) (*time.Time, error) {
 		ORDER BY delivery_date DESC 
 		LIMIT 1
 	`, configID).Scan(&deliveryDate)
-	
+
 	if err == sql.ErrNoRows {
 		return nil, nil // No previous generation
 	}
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &deliveryDate, nil
 }
 
@@ -611,13 +627,13 @@ func (s *Service) getLastGeneratedTime(configID int) (*time.Time, error) {
 // generateAndSendDossier executes the complete dossier generation pipeline.
 //
 // This method orchestrates all steps needed to create and deliver a dossier:
-//   1. Fetch articles from all configured RSS feeds
-//   2. Convert feed items to Article models
-//   3. Sort by publication date (newest first)
-//   4. Limit to requested article count
-//   5. Generate AI summary with specified tone and language
-//   6. Send formatted email to recipient
-//   7. Record delivery in database
+//  1. Fetch articles from all configured RSS feeds
+//  2. Convert feed items to Article models
+//  3. Sort by publication date (newest first)
+//  4. Limit to requested article count
+//  5. Generate AI summary with specified tone and language
+//  6. Send formatted email to recipient
+//  7. Record delivery in database
 //
 // Context:
 // Uses 10-minute timeout to prevent indefinite hangs on slow operations.
@@ -641,7 +657,7 @@ func (s *Service) getLastGeneratedTime(configID int) (*time.Time, error) {
 //   - error: Any step failure (nil on complete success)
 func (s *Service) generateAndSendDossier(config models.DossierConfig) error {
 	log.Printf("Generating scheduled dossier for config %d (%s)", config.ID, config.Title)
-	
+
 	// Create context with timeout for entire pipeline
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -654,7 +670,7 @@ func (s *Service) generateAndSendDossier(config models.DossierConfig) error {
 			log.Printf("Error fetching feed %s: %v", feedURL, err)
 			continue // Skip failed feeds, continue with others
 		}
-		
+
 		// Convert gofeed.Item to models.Article
 		for _, item := range feed.Items {
 			// Extract author name (may be nil)
@@ -662,13 +678,13 @@ func (s *Service) generateAndSendDossier(config models.DossierConfig) error {
 			if item.Author != nil {
 				author = item.Author.Name
 			}
-			
+
 			// Use parsed published date or current time
 			publishedAt := time.Now()
 			if item.PublishedParsed != nil {
 				publishedAt = *item.PublishedParsed
 			}
-			
+
 			// Build article model
 			article := models.Article{
 				Title:       item.Title,
@@ -677,12 +693,12 @@ func (s *Service) generateAndSendDossier(config models.DossierConfig) error {
 				Author:      author,
 				PublishedAt: publishedAt,
 			}
-			
+
 			// Prefer full content over description
 			if item.Content != "" {
 				article.Content = item.Content
 			}
-			
+
 			allArticles = append(allArticles, article)
 		}
 	}
@@ -699,10 +715,10 @@ func (s *Service) generateAndSendDossier(config models.DossierConfig) error {
 
 	// Generate AI summary with configured tone and language
 	summary, err := s.aiService.GenerateSummary(
-		ctx, 
-		allArticles, 
-		config.Tone, 
-		config.Language, 
+		ctx,
+		allArticles,
+		config.Tone,
+		config.Language,
 		config.SpecialInstructions,
 	)
 	if err != nil {
@@ -722,9 +738,9 @@ func (s *Service) generateAndSendDossier(config models.DossierConfig) error {
 		// Don't return error here since email was sent successfully
 	}
 
-	log.Printf("Successfully generated and sent dossier for config %d (%s) to %s", 
+	log.Printf("Successfully generated and sent dossier for config %d (%s) to %s",
 		config.ID, config.Title, config.Email)
-	
+
 	return nil
 }
 
@@ -745,6 +761,6 @@ func (s *Service) recordDossierGeneration(configID int, summary string, articleC
 		INSERT INTO dossier_deliveries (config_id, delivery_date, summary, article_count, email_sent)
 		VALUES ($1, $2, $3, $4, $5)
 	`, configID, time.Now(), summary, articleCount, true)
-	
+
 	return err
 }
